@@ -1,0 +1,1 @@
+# summer-practice-hackathon-2026
