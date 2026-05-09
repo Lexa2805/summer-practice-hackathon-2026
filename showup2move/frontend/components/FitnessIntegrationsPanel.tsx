@@ -26,7 +26,7 @@ export function FitnessIntegrationsPanel({ userId }: { userId: string }) {
                 const data = await getFitnessIntegrations(userId);
                 if (active) setIntegrations(data.integrations || []);
             } catch (loadError) {
-                if (active) setError(loadError instanceof Error ? loadError.message : "Failed to fetch fitness data.");
+                if (active) setError(loadError instanceof Error ? loadError.message : t("profilePage.failedFitness"));
             }
         }
 
@@ -34,7 +34,7 @@ export function FitnessIntegrationsPanel({ userId }: { userId: string }) {
         return () => {
             active = false;
         };
-    }, [userId]);
+    }, [t, userId]);
 
     function findIntegration(provider: string) {
         return integrations.find((item) => item.provider === provider);
@@ -49,9 +49,9 @@ export function FitnessIntegrationsPanel({ userId }: { userId: string }) {
                 const rest = current.filter((item) => item.provider !== provider);
                 return [...rest, record];
             });
-            showToast(`${provider} demo connected.`, "success");
+            showToast(t("profilePage.connectedToast", { provider }), "success");
         } catch (connectError) {
-            setError(connectError instanceof Error ? connectError.message : "Failed to connect demo wearable.");
+            setError(connectError instanceof Error ? connectError.message : t("profilePage.failedConnect"));
         } finally {
             setLoadingProvider(null);
         }
@@ -66,9 +66,9 @@ export function FitnessIntegrationsPanel({ userId }: { userId: string }) {
                 const rest = current.filter((item) => item.provider !== provider);
                 return [...rest, { ...record, provider } as FitnessIntegration];
             });
-            showToast(`${provider} demo disconnected.`, "info");
+            showToast(t("profilePage.disconnectedToast", { provider }), "info");
         } catch (disconnectError) {
-            setError(disconnectError instanceof Error ? disconnectError.message : "Failed to disconnect demo wearable.");
+            setError(disconnectError instanceof Error ? disconnectError.message : t("profilePage.failedDisconnect"));
         } finally {
             setLoadingProvider(null);
         }
@@ -79,11 +79,11 @@ export function FitnessIntegrationsPanel({ userId }: { userId: string }) {
             <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                     <HeartPulse className="h-5 w-5 text-primary" />
-                    {t("fitnessIntegrations")}
+                    {t("profilePage.fitnessIntegrations")}
                 </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground">Demo integration for hackathon prototype.</p>
+                <p className="text-sm text-muted-foreground">{t("profilePage.demoFitness")}</p>
                 {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}
                 <div className="grid gap-3 md:grid-cols-3">
                     {providers.map((provider) => {
@@ -94,17 +94,17 @@ export function FitnessIntegrationsPanel({ userId }: { userId: string }) {
                                 <p className="text-sm font-semibold">{provider}</p>
                                 <p className="mt-1 text-xs text-muted-foreground">
                                     {connected
-                                        ? `Weekly steps: ${integration?.weekly_steps || 0}`
-                                        : "Not connected yet"}
+                                        ? `${t("profilePage.weeklySteps")}: ${integration?.weekly_steps || 0}`
+                                        : t("profilePage.notConnected")}
                                 </p>
                                 {connected ? (
                                     <p className="text-xs text-muted-foreground">
-                                        Active minutes: {integration?.weekly_active_minutes || 0}
+                                        {t("profilePage.activeMinutes")}: {integration?.weekly_active_minutes || 0}
                                     </p>
                                 ) : null}
                                 {connected && integration?.last_sync_at ? (
                                     <p className="text-xs text-muted-foreground">
-                                        Last sync: {new Date(integration.last_sync_at).toLocaleString()}
+                                        {t("profilePage.lastSync")}: {new Date(integration.last_sync_at).toLocaleString()}
                                     </p>
                                 ) : null}
                                 <div className="mt-3">
@@ -115,7 +115,7 @@ export function FitnessIntegrationsPanel({ userId }: { userId: string }) {
                                             disabled={loadingProvider === provider}
                                             onClick={() => disconnect(provider)}
                                         >
-                                            {loadingProvider === provider ? "Updating..." : t("disconnect")}
+                                            {loadingProvider === provider ? t("common.updating") : t("common.disconnect")}
                                         </Button>
                                     ) : (
                                         <Button
@@ -124,7 +124,7 @@ export function FitnessIntegrationsPanel({ userId }: { userId: string }) {
                                             disabled={loadingProvider === provider}
                                             onClick={() => connect(provider)}
                                         >
-                                            {loadingProvider === provider ? "Connecting..." : t("connectDemo")}
+                                            {loadingProvider === provider ? t("common.connecting") : t("profilePage.connectDemo")}
                                         </Button>
                                     )}
                                 </div>

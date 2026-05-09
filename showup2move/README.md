@@ -35,7 +35,17 @@ showup2move/
    - `OPENROUTER_MODEL=google/gemini-2.0-flash-001`
    - `OPENROUTER_VISION_MODEL=google/gemini-2.0-flash-001`
 
+Configure Supabase Auth redirects for password reset:
+
+1. In Supabase Dashboard, open Authentication -> URL Configuration.
+2. Set Site URL to `http://localhost:3000`.
+3. Add these Redirect URLs:
+   - `http://localhost:3000/reset-password`
+   - `http://127.0.0.1:3000/reset-password`
+4. For production, add the production domain reset URL too, for example `https://your-domain.com/reset-password`.
+
 To get an OpenRouter key, create an account at `https://openrouter.ai/`, open the API Keys page, create a key, and paste it into `backend/.env` as `OPENROUTER_API_KEY`. Keep this key backend-only; never add it to `frontend/.env.local`.
+
 5. Run the backend:
 
 ```bash

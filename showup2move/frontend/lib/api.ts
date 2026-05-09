@@ -3,6 +3,8 @@ import type {
   EventItem,
   AvailableUser,
   CompatibilityResult,
+  DirectConversation,
+  DirectMessage,
   WeatherRecommendation,
   TeamBalanceResult,
   TeamBalancePlayer,
@@ -235,6 +237,36 @@ export function sendEventMessage(eventId: string, senderId: string, content: str
   return apiFetchStrict<Message>(
     `/events/${eventId}/messages`,
     { method: "POST", body: JSON.stringify({ sender_id: senderId, content }) }
+  );
+}
+
+export function createDirectConversation(currentUserId: string, otherUserId: string) {
+  return apiFetchStrict<DirectConversation>(
+    "/direct/conversations",
+    { method: "POST", body: JSON.stringify({ current_user_id: currentUserId, other_user_id: otherUserId }) }
+  );
+}
+
+export function getDirectConversations(userId: string) {
+  return apiFetchStrict<DirectConversation[]>(`/direct/conversations/${userId}`);
+}
+
+export function getDirectMessages(conversationId: string, userId: string) {
+  const params = new URLSearchParams({ user_id: userId });
+  return apiFetchStrict<DirectMessage[]>(`/direct/conversations/${conversationId}/messages?${params.toString()}`);
+}
+
+export function sendDirectMessage(conversationId: string, senderId: string, content: string) {
+  return apiFetchStrict<DirectMessage>(
+    `/direct/conversations/${conversationId}/messages`,
+    { method: "POST", body: JSON.stringify({ sender_id: senderId, content }) }
+  );
+}
+
+export function markDirectMessagesRead(conversationId: string, userId: string) {
+  return apiFetchStrict<{ success: boolean; updated: number }>(
+    `/direct/conversations/${conversationId}/read`,
+    { method: "POST", body: JSON.stringify({ user_id: userId }) }
   );
 }
 

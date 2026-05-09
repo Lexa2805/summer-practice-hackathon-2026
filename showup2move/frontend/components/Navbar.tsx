@@ -2,22 +2,22 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Bell, Dumbbell, LogOut, Plus, UserRound, Moon, Sun } from "lucide-react";
+import { Bell, Dumbbell, LogOut, MessageCircle, Plus, UserRound, Moon, Sun } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 import { Button } from "@/components/ui/button";
-import { getNotifications, getProfile } from "@/lib/api";
+import { getDirectConversations, getNotifications, getProfile } from "@/lib/api";
 import { getCurrentSession, logout } from "@/lib/auth";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { useI18n } from "@/lib/i18n";
 import { useTheme } from "@/lib/theme";
 
 const navItems = [
-  { href: "/dashboard", labelKey: "dashboard" },
-  { href: "/showup", labelKey: "showup" },
-  { href: "/groups", labelKey: "groups" },
-  { href: "/events", labelKey: "events" }
+  { href: "/dashboard", labelKey: "nav.dashboard" },
+  { href: "/showup", labelKey: "nav.showup" },
+  { href: "/groups", labelKey: "nav.groups" },
+  { href: "/events", labelKey: "nav.events" }
 ];
 
 export function Navbar() {
@@ -26,6 +26,7 @@ export function Navbar() {
   const { theme, toggleTheme } = useTheme();
   const [userId, setUserId] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [directUnreadCount, setDirectUnreadCount] = useState(0);
   const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -47,9 +48,15 @@ export function Navbar() {
         if (!active || !session?.user) return;
         setUserId(session.user.id);
         await refreshProfileAvatar(session.user.id);
-        const notifications = await getNotifications(session.user.id);
+        const [notifications, directConversations] = await Promise.all([
+          getNotifications(session.user.id),
+          getDirectConversations(session.user.id),
+        ]);
         if (!active) return;
         setUnreadCount(notifications.filter((notification) => !notification.read).length);
+        setDirectUnreadCount(
+          directConversations.reduce((total, conversation) => total + (conversation.unread_count || 0), 0)
+        );
 
         const supabase = getSupabaseBrowserClient();
         channel = supabase
@@ -80,6 +87,14 @@ export function Navbar() {
               if (active) setUnreadCount(nextNotifications.filter((notification) => !notification.read).length);
             }
           )
+          .on("postgres_changes", { event: "*", schema: "public", table: "direct_messages" }, async () => {
+            const directConversations = await getDirectConversations(session.user.id);
+            if (active) {
+              setDirectUnreadCount(
+                directConversations.reduce((total, conversation) => total + (conversation.unread_count || 0), 0)
+              );
+            }
+          })
           .subscribe((status) => {
             if (process.env.NODE_ENV === "development" && status === "SUBSCRIBED") {
               console.log(`Subscribed to notifications for user ${session.user.id}`);
@@ -138,7 +153,7 @@ export function Navbar() {
           <Button
             variant="ghost"
             size="icon"
-            title={theme === "dark" ? t("lightMode") : t("darkMode")}
+            title={theme === "dark" ? t("theme.lightMode") : t("theme.darkMode")}
             onClick={toggleTheme}
           >
             {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
@@ -160,8 +175,8 @@ export function Navbar() {
               RO
             </button>
           </div>
-          <Link href="/notifications" aria-label="Open notifications">
-            <Button variant="outline" size="icon" title="Notifications">
+          <Link href="/notifications" aria-label={t("nav.notifications")}>
+            <Button variant="outline" size="icon" title={t("nav.notifications")}>
               <span className="relative">
                 <Bell className="h-4 w-4" />
                 {userId && unreadCount > 0 ? (
@@ -172,21 +187,33 @@ export function Navbar() {
               </span>
             </Button>
           </Link>
-          <Link href="/events" aria-label="Create event">
-            <Button variant="accent" size="icon" title="Create event">
+          <Link href="/messages" aria-label={t("messagesPage.directMessages")}>
+            <Button variant="outline" size="icon" title={t("nav.messages")}>
+              <span className="relative">
+                <MessageCircle className="h-4 w-4" />
+                {userId && directUnreadCount > 0 ? (
+                  <span className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+                    {directUnreadCount > 9 ? "9+" : directUnreadCount}
+                  </span>
+                ) : null}
+              </span>
+            </Button>
+          </Link>
+          <Link href="/events" aria-label={t("eventsPage.createEvent")}>
+            <Button variant="accent" size="icon" title={t("eventsPage.createEvent")}>
               <Plus className="h-4 w-4" />
             </Button>
           </Link>
-          <Link href="/profile" aria-label="Edit profile">
-            <Button variant="secondary" size="icon" title="Profile" className="overflow-hidden border border-border">
+          <Link href="/profile" aria-label={t("dashboard.editProfile")}>
+            <Button variant="secondary" size="icon" title={t("nav.profile")} className="overflow-hidden border border-border">
               {profileAvatarUrl ? (
-                <img src={profileAvatarUrl} alt="Profile" className="h-full w-full object-cover" />
+                <img src={profileAvatarUrl} alt={t("nav.profile")} className="h-full w-full object-cover" />
               ) : (
                 <UserRound className="h-5 w-5" />
               )}
             </Button>
           </Link>
-          <Button variant="ghost" size="icon" title={t("logout")} onClick={signOut}>
+          <Button variant="ghost" size="icon" title={t("nav.logout")} onClick={signOut}>
             <LogOut className="h-4 w-4" />
           </Button>
         </div>

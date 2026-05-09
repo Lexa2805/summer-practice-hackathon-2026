@@ -14,6 +14,18 @@ export async function loginWithEmail(email: string, password: string) {
   return data;
 }
 
+export async function sendPasswordResetEmail(email: string, redirectTo: string) {
+  const { data, error } = await getSupabaseBrowserClient().auth.resetPasswordForEmail(email, { redirectTo });
+  if (error) throw error;
+  return data;
+}
+
+export async function updatePassword(password: string) {
+  const { data, error } = await getSupabaseBrowserClient().auth.updateUser({ password });
+  if (error) throw error;
+  return data;
+}
+
 export async function logout() {
   const { error } = await getSupabaseBrowserClient().auth.signOut();
   if (error) throw error;

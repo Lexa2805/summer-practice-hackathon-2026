@@ -12,11 +12,13 @@ import { ErrorMessage } from "@/components/ui/error-state";
 import { LoadingPage } from "@/components/ui/loading-skeleton";
 import { getNotifications, markAllNotificationsRead, markNotificationRead } from "@/lib/api";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
+import { useI18n } from "@/lib/i18n";
 import type { NotificationItem } from "@/lib/types";
 import { useAuthProfile } from "@/lib/use-auth-profile";
 
 export default function NotificationsPage() {
   const { user, loading, error } = useAuthProfile();
+  const { t } = useI18n();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [dataError, setDataError] = useState("");
 
@@ -26,9 +28,9 @@ export default function NotificationsPage() {
     try {
       setNotifications(await getNotifications(user.id));
     } catch (loadError) {
-      setDataError(loadError instanceof Error ? loadError.message : "Could not load notifications. Please check if the backend is running.");
+      setDataError(loadError instanceof Error ? loadError.message : t("notificationsPage.couldNotLoad"));
     }
-  }, [user]);
+  }, [t, user]);
 
   useEffect(() => {
     loadNotifications();
@@ -59,7 +61,7 @@ export default function NotificationsPage() {
       const updated = await markNotificationRead(notificationId);
       setNotifications((current) => current.map((item) => (item.id === updated.id ? updated : item)));
     } catch (readError) {
-      setDataError(readError instanceof Error ? readError.message : "Could not mark notification as read.");
+      setDataError(readError instanceof Error ? readError.message : t("notificationsPage.couldNotMarkRead"));
     }
   }
 
@@ -69,7 +71,7 @@ export default function NotificationsPage() {
       await markAllNotificationsRead(user.id);
       setNotifications((current) => current.map((item) => ({ ...item, read: true })));
     } catch (readError) {
-      setDataError(readError instanceof Error ? readError.message : "Could not mark notifications as read.");
+      setDataError(readError instanceof Error ? readError.message : t("notificationsPage.couldNotMarkAllRead"));
     }
   }
 
@@ -84,7 +86,7 @@ export default function NotificationsPage() {
   if (error || !user) {
     return (
       <main className="mx-auto max-w-4xl px-4 py-10 md:px-8">
-        <ErrorMessage message={error || "Login required."} />
+        <ErrorMessage message={error || t("errors.loginRequired")} />
       </main>
     );
   }
@@ -92,13 +94,13 @@ export default function NotificationsPage() {
   return (
     <main className="mx-auto max-w-4xl px-4 py-10 md:px-8">
       <PageHeader
-        label="REMINDERS"
-        title="Notifications"
+        label={t("notificationsPage.label")}
+        title={t("notificationsPage.title")}
         action={
           notifications.some((notification) => !notification.read) ? (
             <Button type="button" variant="secondary" onClick={markAllRead}>
               <Check className="h-4 w-4" />
-              Mark all as read
+              {t("notificationsPage.markAllRead")}
             </Button>
           ) : null
         }
@@ -122,18 +124,23 @@ export default function NotificationsPage() {
                 <div className="flex flex-wrap gap-2">
                   {notification.related_group_id ? (
                     <Link href={`/groups/${notification.related_group_id}/chat`}>
-                      <Button size="sm" variant="secondary">Open group chat</Button>
+                      <Button size="sm" variant="secondary">{t("notificationsPage.openGroupChat")}</Button>
                     </Link>
                   ) : null}
                   {notification.related_event_id ? (
                     <Link href={`/events/${notification.related_event_id}/chat`}>
-                      <Button size="sm" variant="secondary">Open event chat</Button>
+                      <Button size="sm" variant="secondary">{t("notificationsPage.openEventChat")}</Button>
+                    </Link>
+                  ) : null}
+                  {notification.related_direct_conversation_id ? (
+                    <Link href={`/messages/${notification.related_direct_conversation_id}`}>
+                      <Button size="sm" variant="secondary">{t("notificationsPage.openMessage")}</Button>
                     </Link>
                   ) : null}
                   {!notification.read ? (
                     <Button size="sm" variant="outline" onClick={() => markRead(notification.id)}>
                       <Check className="h-4 w-4" />
-                      Mark read
+                      {t("notificationsPage.markRead")}
                     </Button>
                   ) : null}
                 </div>
@@ -143,8 +150,8 @@ export default function NotificationsPage() {
         ) : (
           <EmptyState
             icon={Bell}
-            title="No notifications yet"
-            description="You'll see updates about groups, events, and matches here."
+            title={t("notificationsPage.noNotifications")}
+            description={t("notificationsPage.noNotificationsDescription")}
           />
         )}
       </div>

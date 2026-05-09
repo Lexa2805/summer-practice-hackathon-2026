@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Sparkles, UserPlus, X } from "lucide-react";
+import { MessageCircle, Sparkles, UserPlus, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { addGroupMembers, getAvailableUsers, getTeammateRecommendations } from "@/lib/api";
-import type { Group, Profile, TeammateRecommendation } from "@/lib/types";
+import { addGroupMembers, createDirectConversation, getAvailableUsers, getTeammateRecommendations } from "@/lib/api";
+import type { AvailableUser, Group, Profile, TeammateRecommendation } from "@/lib/types";
 
 export function FindTeammateModal({
   group,
@@ -21,9 +22,12 @@ export function FindTeammateModal({
   onClose: () => void;
   onAdded: () => void;
 }) {
+  const router = useRouter();
   const [recommendations, setRecommendations] = useState<TeammateRecommendation[]>([]);
+  const [candidateProfiles, setCandidateProfiles] = useState<Record<string, AvailableUser>>({});
   const [loading, setLoading] = useState(false);
   const [addingIds, setAddingIds] = useState<Set<string>>(new Set());
+  const [messagingIds, setMessagingIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -44,6 +48,7 @@ export function FindTeammateModal({
         existingMemberIds.add(currentUserProfile.id);
         
         const filteredCandidates = candidates.filter((c) => !existingMemberIds.has(c.id));
+        setCandidateProfiles(Object.fromEntries(filteredCandidates.map((candidate) => [candidate.id, candidate])));
         
         if (filteredCandidates.length === 0) {
           setLoading(false);
@@ -86,6 +91,33 @@ export function FindTeammateModal({
     }
   }
 
+  async function handleMessage(userId: string) {
+    setMessagingIds((prev) => new Set(prev).add(userId));
+    setError("");
+    try {
+      const conversation = await createDirectConversation(currentUserProfile.id, userId);
+      onClose();
+      router.push(`/messages/${conversation.id}`);
+    } catch {
+      setError("Could not start conversation.");
+    } finally {
+      setMessagingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(userId);
+        return next;
+      });
+    }
+  }
+
+  function initials(name?: string) {
+    return (name || "Player")
+      .split(" ")
+      .map((part) => part[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase();
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
       <Card className="w-full max-w-lg shadow-lg">
@@ -110,14 +142,35 @@ export function FindTeammateModal({
             ) : recommendations.length === 0 ? (
               <p className="text-sm text-muted-foreground">No strong recommendations found yet.</p>
             ) : (
-              recommendations.map((rec) => (
+              recommendations.map((rec) => {
+                const candidate = candidateProfiles[rec.user_id];
+                const displayName = rec.full_name || candidate?.full_name || candidate?.username || "Player";
+                return (
                 <div key={rec.user_id} className="flex flex-col gap-2 rounded-md border p-3">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="truncate text-sm font-bold">{rec.full_name}</p>
-                    <div className="flex items-center gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-secondary text-xs font-bold text-secondary-foreground">
+                        {candidate?.avatar_url ? (
+                          <img src={candidate.avatar_url} alt={displayName} className="h-full w-full object-cover" />
+                        ) : (
+                          initials(displayName)
+                        )}
+                      </div>
+                      <p className="truncate text-sm font-bold">{displayName}</p>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                       <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
                         Compatibility: {rec.score}%
                       </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={messagingIds.has(rec.user_id)}
+                        onClick={() => handleMessage(rec.user_id)}
+                      >
+                        <MessageCircle className="mr-1 h-3 w-3" />
+                        {messagingIds.has(rec.user_id) ? "Opening..." : "Message"}
+                      </Button>
                       <Button
                         size="sm"
                         variant="secondary"
@@ -125,7 +178,7 @@ export function FindTeammateModal({
                         onClick={() => handleAdd(rec.user_id)}
                       >
                         <UserPlus className="mr-1 h-3 w-3" />
-                        {addingIds.has(rec.user_id) ? "Adding..." : "Add"}
+                        {addingIds.has(rec.user_id) ? "Adding..." : "Add to group"}
                       </Button>
                     </div>
                   </div>
@@ -136,7 +189,8 @@ export function FindTeammateModal({
                     </p>
                   )}
                 </div>
-              ))
+                );
+              })
             )}
           </div>
         </CardContent>

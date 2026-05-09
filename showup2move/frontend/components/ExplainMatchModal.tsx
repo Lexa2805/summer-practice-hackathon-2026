@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { X, Sparkles, CheckCircle2, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -13,13 +13,15 @@ import { useI18n } from "@/lib/i18n";
 interface ExplainMatchModalProps {
   groupId: string;
   groupName?: string;
+  autoRun?: boolean;
   onClose: () => void;
 }
 
-export function ExplainMatchModal({ groupId, groupName, onClose }: ExplainMatchModalProps) {
+export function ExplainMatchModal({ groupId, groupName, autoRun = false, onClose }: ExplainMatchModalProps) {
   const { t } = useI18n();
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(autoRun);
   const [error, setError] = useState("");
+  const [hasAutoStarted, setHasAutoStarted] = useState(false);
   const [result, setResult] = useState<{
     title: string;
     reasons: string[];
@@ -27,7 +29,7 @@ export function ExplainMatchModal({ groupId, groupName, onClose }: ExplainMatchM
     source: string;
   } | null>(null);
 
-  const handleExplain = async () => {
+  const handleExplain = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
@@ -39,7 +41,13 @@ export function ExplainMatchModal({ groupId, groupName, onClose }: ExplainMatchM
     } finally {
       setLoading(false);
     }
-  };
+  }, [groupId, t]);
+
+  useEffect(() => {
+    if (!autoRun || hasAutoStarted) return;
+    setHasAutoStarted(true);
+    handleExplain();
+  }, [autoRun, handleExplain, hasAutoStarted]);
 
   const getSourceVariant = (source: string): "success" | "info" | "warning" => {
     if (source === "ollama") return "success";

@@ -56,6 +56,15 @@ class MessageCreate(BaseModel):
     content: str
 
 
+class DirectConversationCreate(BaseModel):
+    current_user_id: str
+    other_user_id: str
+
+
+class DirectReadRequest(BaseModel):
+    user_id: str
+
+
 class ExtractInterestsRequest(BaseModel):
     description: str
 

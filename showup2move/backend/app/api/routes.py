@@ -11,6 +11,8 @@ from app.models.schemas import (
     AvailabilityCreate,
     CompatibilityRequest,
     ConfirmParticipationRequest,
+    DirectConversationCreate,
+    DirectReadRequest,
     EventCreate,
     EventParticipationRequest,
     ExtractInterestsRequest,
@@ -64,17 +66,21 @@ def _create_notification(
     notification_type: str = "info",
     related_group_id: str | None = None,
     related_event_id: str | None = None,
+    related_direct_conversation_id: str | None = None,
 ) -> None:
     try:
+        payload = {
+            "user_id": user_id,
+            "title": title,
+            "message": message,
+            "type": notification_type,
+            "related_group_id": related_group_id,
+            "related_event_id": related_event_id,
+        }
+        if related_direct_conversation_id:
+            payload["related_direct_conversation_id"] = related_direct_conversation_id
         supabase.table("notifications").insert(
-            {
-                "user_id": user_id,
-                "title": title,
-                "message": message,
-                "type": notification_type,
-                "related_group_id": related_group_id,
-                "related_event_id": related_event_id,
-            }
+            payload
         ).execute()
     except Exception:
         # Notifications should never block the primary user action.
@@ -111,6 +117,49 @@ def _messages_with_senders(supabase, rows: list[dict]) -> list[dict]:
         }
         for row in rows
     ]
+
+
+def _public_profiles(supabase, user_ids: list[str]) -> dict[str, dict]:
+    if not user_ids:
+        return {}
+    rows = (
+        supabase.table("profiles")
+        .select("id,full_name,username,avatar_url,city")
+        .in_("id", list(set(user_ids)))
+        .execute()
+        .data
+        or []
+    )
+    return {row["id"]: row for row in rows}
+
+
+def _conversation_other_user(conversation: dict, current_user_id: str) -> str:
+    return (
+        conversation["user_two_id"]
+        if conversation.get("user_one_id") == current_user_id
+        else conversation["user_one_id"]
+    )
+
+
+def _direct_conversation_rows(supabase, conversation_id: str) -> list[dict]:
+    return (
+        supabase.table("direct_conversations")
+        .select("*")
+        .eq("id", conversation_id)
+        .execute()
+        .data
+        or []
+    )
+
+
+def _require_direct_conversation_member(supabase, conversation_id: str, user_id: str) -> dict:
+    rows = _direct_conversation_rows(supabase, conversation_id)
+    if not rows:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    conversation = rows[0]
+    if user_id not in {conversation.get("user_one_id"), conversation.get("user_two_id")}:
+        raise HTTPException(status_code=403, detail="User not allowed to view this conversation")
+    return conversation
 
 
 def _group_member_ids(supabase, group_id: str) -> list[str]:
@@ -1066,6 +1115,222 @@ def send_event_message(event_id: str, payload: MessageCreate) -> dict:
                 detail="Event chat needs backend/migrations/001_communication_realtime.sql.",
             ) from exc
         raise HTTPException(status_code=500, detail=f"Could not send event message: {exc}") from exc
+
+
+@router.post("/direct/conversations")
+def create_or_get_direct_conversation(payload: DirectConversationCreate) -> dict:
+    supabase = require_supabase()
+    current_user_id = payload.current_user_id.strip()
+    other_user_id = payload.other_user_id.strip()
+    if not current_user_id or not other_user_id:
+        raise HTTPException(status_code=400, detail="Both users are required")
+    if current_user_id == other_user_id:
+        raise HTTPException(status_code=400, detail="You cannot message yourself")
+
+    user_one_id, user_two_id = sorted([current_user_id, other_user_id])
+    try:
+        profiles = _public_profiles(supabase, [current_user_id, other_user_id])
+        if current_user_id not in profiles or other_user_id not in profiles:
+            raise HTTPException(status_code=404, detail="User profile not found")
+
+        rows = (
+            supabase.table("direct_conversations")
+            .select("*")
+            .eq("user_one_id", user_one_id)
+            .eq("user_two_id", user_two_id)
+            .execute()
+            .data
+            or []
+        )
+        if not rows:
+            try:
+                rows = (
+                    supabase.table("direct_conversations")
+                    .insert({"user_one_id": user_one_id, "user_two_id": user_two_id})
+                    .execute()
+                    .data
+                    or []
+                )
+            except Exception:
+                # Another request may have created the same canonical conversation.
+                rows = (
+                    supabase.table("direct_conversations")
+                    .select("*")
+                    .eq("user_one_id", user_one_id)
+                    .eq("user_two_id", user_two_id)
+                    .execute()
+                    .data
+                    or []
+                )
+        if not rows:
+            raise HTTPException(status_code=500, detail="Could not start conversation")
+        return {
+            **rows[0],
+            "other_user": profiles.get(other_user_id),
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Could not start conversation: {exc}") from exc
+
+
+@router.get("/direct/conversations/{user_id}")
+def list_direct_conversations(user_id: str) -> list[dict]:
+    supabase = require_supabase()
+    try:
+        conversations = (
+            supabase.table("direct_conversations")
+            .select("*")
+            .or_(f"user_one_id.eq.{user_id},user_two_id.eq.{user_id}")
+            .order("updated_at", desc=True)
+            .execute()
+            .data
+            or []
+        )
+        if not conversations:
+            return []
+
+        conversation_ids = [conversation["id"] for conversation in conversations]
+        other_user_ids = [_conversation_other_user(conversation, user_id) for conversation in conversations]
+        profiles = _public_profiles(supabase, other_user_ids)
+
+        message_rows = (
+            supabase.table("direct_messages")
+            .select("id,conversation_id,sender_id,content,read,created_at")
+            .in_("conversation_id", conversation_ids)
+            .order("created_at", desc=True)
+            .execute()
+            .data
+            or []
+        )
+        last_by_conversation: dict[str, dict] = {}
+        unread_by_conversation: dict[str, int] = {}
+        for message in message_rows:
+            conversation_id = message.get("conversation_id")
+            if conversation_id and conversation_id not in last_by_conversation:
+                last_by_conversation[conversation_id] = message
+            if (
+                conversation_id
+                and message.get("sender_id") != user_id
+                and message.get("read") is not True
+            ):
+                unread_by_conversation[conversation_id] = unread_by_conversation.get(conversation_id, 0) + 1
+
+        result = []
+        for conversation in conversations:
+            other_user_id = _conversation_other_user(conversation, user_id)
+            last_message = last_by_conversation.get(conversation["id"])
+            result.append(
+                {
+                    "id": conversation["id"],
+                    "user_one_id": conversation.get("user_one_id"),
+                    "user_two_id": conversation.get("user_two_id"),
+                    "created_at": conversation.get("created_at"),
+                    "updated_at": conversation.get("updated_at"),
+                    "other_user": profiles.get(
+                        other_user_id,
+                        {
+                            "id": other_user_id,
+                            "full_name": "Player",
+                            "username": "player",
+                            "avatar_url": None,
+                            "city": None,
+                        },
+                    ),
+                    "last_message": last_message.get("content") if last_message else None,
+                    "last_message_at": last_message.get("created_at") if last_message else None,
+                    "unread_count": unread_by_conversation.get(conversation["id"], 0),
+                }
+            )
+        return result
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Could not load conversations: {exc}") from exc
+
+
+@router.get("/direct/conversations/{conversation_id}/messages")
+def get_direct_messages(conversation_id: str, user_id: str = Query(min_length=1)) -> list[dict]:
+    supabase = require_supabase()
+    try:
+        _require_direct_conversation_member(supabase, conversation_id, user_id)
+        rows = (
+            supabase.table("direct_messages")
+            .select("id,conversation_id,sender_id,content,read,created_at")
+            .eq("conversation_id", conversation_id)
+            .order("created_at", desc=False)
+            .execute()
+            .data
+            or []
+        )
+        return _messages_with_senders(supabase, rows)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Could not load messages: {exc}") from exc
+
+
+@router.post("/direct/conversations/{conversation_id}/messages")
+def send_direct_message(conversation_id: str, payload: MessageCreate) -> dict:
+    supabase = require_supabase()
+    content = payload.content.strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="Message content is required")
+
+    try:
+        conversation = _require_direct_conversation_member(supabase, conversation_id, payload.sender_id)
+        row = (
+            supabase.table("direct_messages")
+            .insert(
+                {
+                    "conversation_id": conversation_id,
+                    "sender_id": payload.sender_id,
+                    "content": content,
+                }
+            )
+            .execute()
+            .data[0]
+        )
+        supabase.table("direct_conversations").update({"updated_at": datetime.now(timezone.utc).isoformat()}).eq(
+            "id", conversation_id
+        ).execute()
+
+        recipient_id = _conversation_other_user(conversation, payload.sender_id)
+        sender_profile = _public_profiles(supabase, [payload.sender_id]).get(payload.sender_id, {})
+        sender_name = sender_profile.get("full_name") or sender_profile.get("username") or "A teammate"
+        _create_notification(
+            supabase,
+            recipient_id,
+            "New direct message",
+            f"{sender_name} sent you a message.",
+            "direct_message",
+            related_direct_conversation_id=conversation_id,
+        )
+        return _messages_with_senders(supabase, [row])[0]
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Could not send message: {exc}") from exc
+
+
+@router.post("/direct/conversations/{conversation_id}/read")
+def mark_direct_messages_read(conversation_id: str, payload: DirectReadRequest) -> dict:
+    supabase = require_supabase()
+    try:
+        _require_direct_conversation_member(supabase, conversation_id, payload.user_id)
+        rows = (
+            supabase.table("direct_messages")
+            .update({"read": True})
+            .eq("conversation_id", conversation_id)
+            .neq("sender_id", payload.user_id)
+            .eq("read", False)
+            .execute()
+            .data
+            or []
+        )
+        return {"success": True, "updated": len(rows)}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Could not mark messages as read: {exc}") from exc
 
 
 @router.get("/notifications/{user_id}")

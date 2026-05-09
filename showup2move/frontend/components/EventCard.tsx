@@ -31,7 +31,7 @@ export function EventCard({
   onDelete?: (event: EventItem) => void;
 }) {
   const { t } = useI18n();
-  const when = event.event_time ? new Date(event.event_time).toLocaleString() : "Time pending";
+  const when = event.event_time ? new Date(event.event_time).toLocaleString() : t("eventsPage.timePending");
   const isPast = event.event_time ? new Date(event.event_time) < new Date() : false;
   const [calendarLoading, setCalendarLoading] = useState(false);
   const [calendarError, setCalendarError] = useState("");
@@ -66,7 +66,7 @@ export function EventCard({
 
   async function downloadCalendar() {
     if (!canExportCalendar) {
-      setCalendarError("Add an event time before exporting to calendar.");
+      setCalendarError(t("eventsPage.addTimeBeforeCalendar"));
       return;
     }
     setCalendarError("");
@@ -74,7 +74,7 @@ export function EventCard({
     try {
       const response = await fetch(getEventCalendarUrl(event.id));
       if (!response.ok) {
-        throw new Error("Calendar export failed");
+        throw new Error(t("eventsPage.calendarExportError"));
       }
       const ics = await response.text();
       const blob = new Blob([ics], { type: "text/calendar" });
@@ -87,7 +87,7 @@ export function EventCard({
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch {
-      setCalendarError("Failed to export calendar.");
+      setCalendarError(t("eventsPage.calendarExportFailed"));
     } finally {
       setCalendarLoading(false);
     }
@@ -96,11 +96,11 @@ export function EventCard({
   async function loadWeather() {
     setWeatherError("");
     if (!city) {
-      setWeatherError("Add a city in your profile to check weather.");
+      setWeatherError(t("eventsPage.addCityWeather"));
       return;
     }
     if (!sportName) {
-      setWeatherError("Sport is required for weather checks.");
+      setWeatherError(t("eventsPage.selectSportWeather"));
       return;
     }
 
@@ -115,7 +115,7 @@ export function EventCard({
       setWeatherError(
         weatherFetchError instanceof Error
           ? weatherFetchError.message
-          : "Failed to fetch weather recommendation."
+          : t("eventsPage.failedWeather")
       );
     } finally {
       setWeatherLoading(false);
@@ -144,10 +144,10 @@ export function EventCard({
           <CardTitle>{event.title}</CardTitle>
           <div className="flex flex-wrap justify-end gap-2">
             <Badge className="border-accent/30 bg-accent/10 text-foreground">
-              {event.sport_name || "Sport"}
+              {event.sport_name || t("common.sport")}
             </Badge>
             {event.event_time ? (
-              <Badge className="bg-muted text-foreground">{isPast ? "Past" : "Upcoming"}</Badge>
+              <Badge className="bg-muted text-foreground">{isPast ? t("eventsPage.past") : t("eventsPage.upcoming")}</Badge>
             ) : null}
           </div>
         </div>
@@ -155,7 +155,7 @@ export function EventCard({
       <CardContent className="space-y-3 text-sm text-muted-foreground">
         <p className="flex items-center gap-2">
           <MapPin className="h-4 w-4 text-primary" />
-          {event.location_name || "Location pending"}
+          {event.location_name || t("eventsPage.locationPending")}
         </p>
         <p className="flex items-center gap-2">
           <CalendarClock className="h-4 w-4 text-primary" />
@@ -163,7 +163,7 @@ export function EventCard({
         </p>
         <p className="flex items-center gap-2">
           <WalletCards className="h-4 w-4 text-primary" />
-          {event.price_estimate ? `${event.price_estimate} RON estimate` : "Free or split later"}
+          {event.price_estimate ? `${event.price_estimate} RON ${t("common.estimate")}` : t("common.freeOrSplitLater")}
         </p>
         <p className="flex items-center gap-2">
           <UsersRound className="h-4 w-4 text-primary" />
@@ -171,13 +171,13 @@ export function EventCard({
         </p>
         {event.group_id ? (
           <p className="flex items-center gap-2 text-sm">
-            Group event
+            {t("eventsPage.groupEventLabel")}
             {event.group_id ? (
               <Link
                 href={`/groups/${event.group_id}/chat`}
                 className="ml-1 font-medium text-primary hover:underline"
               >
-                (open group chat)
+                ({t("eventsPage.openGroupChat")})
               </Link>
             ) : null}
           </p>
@@ -191,7 +191,7 @@ export function EventCard({
               onClick={() => setIsCaptainPlanOpen(true)}
             >
               <Sparkles className="h-4 w-4 text-primary" />
-              Generate captain plan
+              {t("eventsPage.generateCaptainPlan")}
             </Button>
           ) : null}
           {currentUserId && event.created_by !== currentUserId ? (
@@ -205,12 +205,12 @@ export function EventCard({
               {isUserAttending ? (
                 <>
                   <UserCheck className="h-4 w-4" />
-                  {participationLoading ? "Updating..." : t("attending")}
+                  {participationLoading ? t("common.updating") : t("eventsPage.attending")}
                 </>
               ) : (
                 <>
                   <UserPlus className="h-4 w-4" />
-                  {participationLoading ? "Joining..." : t("joinEvent")}
+                  {participationLoading ? t("eventsPage.joining") : t("eventsPage.joinEvent")}
                 </>
               )}
             </Button>
@@ -218,7 +218,7 @@ export function EventCard({
           <Link href={`/events/${event.id}/chat`} className="inline-flex">
             <Button variant="secondary" size="sm">
               <MessageCircle className="h-4 w-4" />
-              {t("openChat")}
+              {t("eventsPage.openGroupChat")}
             </Button>
           </Link>
           <Button
@@ -229,12 +229,12 @@ export function EventCard({
             onClick={downloadCalendar}
           >
             <CalendarClock className="h-4 w-4" />
-            {calendarLoading ? "Exporting..." : t("addToCalendar")}
+            {calendarLoading ? t("eventsPage.exporting") : t("eventsPage.addToCalendar")}
           </Button>
           {currentUserId ? (
             <Button type="button" variant="outline" size="sm" onClick={() => setInviteOpen(true)}>
               <UsersRound className="h-4 w-4" />
-              {t("inviteFriend")}
+              {t("eventsPage.inviteFriend")}
             </Button>
           ) : null}
           {canDelete ? (
@@ -246,7 +246,7 @@ export function EventCard({
               onClick={() => onDelete?.(event)}
             >
               <Trash2 className="h-4 w-4" />
-              {deleting ? "Deleting..." : t("delete")}
+              {deleting ? t("common.deleting") : t("common.delete")}
             </Button>
           ) : null}
         </div>
@@ -256,17 +256,17 @@ export function EventCard({
             <div className="flex items-center justify-between gap-2">
               <span className="flex items-center gap-2 font-semibold">
                 <CloudSun className="h-4 w-4 text-primary" />
-                {t("weather")}
+                {t("eventsPage.weather")}
               </span>
               <Button type="button" variant="outline" size="sm" disabled={weatherLoading} onClick={loadWeather}>
-                {weatherLoading ? "Checking..." : "Check"}
+                {weatherLoading ? t("common.checking") : t("common.check")}
               </Button>
             </div>
             {weather ? (
               <div className="mt-2 space-y-1">
                 <p className="font-semibold">{weather.recommendation}</p>
                 <p className="text-xs text-muted-foreground">{weather.summary}</p>
-                <p className="text-xs font-semibold text-primary">Score: {weather.score}</p>
+                <p className="text-xs font-semibold text-primary">{t("common.score")}: {weather.score}</p>
               </div>
             ) : null}
             {weatherError ? <p className="mt-2 text-xs font-semibold text-destructive">{weatherError}</p> : null}

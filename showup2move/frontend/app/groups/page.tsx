@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Plus, UsersRound, Sparkles, Shuffle } from "lucide-react";
+import { Plus, UsersRound, Shuffle } from "lucide-react";
 
 import { GroupCard } from "@/components/GroupCard";
 import { MatchRunner } from "@/components/MatchRunner";
+import { SmartRecommendations } from "@/components/SmartRecommendations";
 import { CreateGroupModal } from "@/components/CreateGroupModal";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
@@ -30,9 +31,9 @@ export default function GroupsPage() {
     try {
       setGroups(await getGroups(user.id));
     } catch (loadError) {
-      setDataError(loadError instanceof Error ? loadError.message : "Could not load groups. Please check if the backend is running.");
+      setDataError(loadError instanceof Error ? loadError.message : t("groupsPage.couldNotLoad"));
     }
-  }, [user]);
+  }, [t, user]);
 
   useEffect(() => {
     loadGroups();
@@ -49,7 +50,7 @@ export default function GroupsPage() {
   if (error || !user) {
     return (
       <main className="mx-auto max-w-7xl px-4 py-10 md:px-8">
-        <ErrorMessage message={error || "Login required."} />
+        <ErrorMessage message={error || t("errors.loginRequired")} />
       </main>
     );
   }
@@ -57,9 +58,9 @@ export default function GroupsPage() {
   return (
     <main className="mx-auto max-w-7xl px-4 py-10 md:px-8">
       <PageHeader
-        label="YOUR MATCHED GROUPS"
-        title={t("groups")}
-        subtitle="Groups are sets of matched people. Each group has its own chat and can have multiple events."
+        label={t("groupsPage.label")}
+        title={t("groupsPage.title")}
+        subtitle={t("groupsPage.subtitle")}
       />
 
       {dataError ? <ErrorMessage message={dataError} className="mb-6" /> : null}
@@ -81,18 +82,18 @@ export default function GroupsPage() {
           ) : (
             <EmptyState
               icon={UsersRound}
-              title="No groups yet"
-              description="Mark yourself available today and run the matcher, or create your own group."
+              title={t("groupsPage.noGroups")}
+              description={t("groupsPage.noGroupsDescription")}
               action={() => setIsCreateOpen(true)}
-              actionLabel="Create new group"
+              actionLabel={t("groupsPage.createNewGroup")}
             />
           )}
         </div>
 
         <div className="space-y-6">
           <SectionCardWithBorder
-            title="Smart Matching"
-            description="Let our AI automatically match you with a nearby group based on your preferences and skill level."
+            title={t("matcher.smartMatching")}
+            description={t("groupsPage.smartMatchingDescription")}
           >
             <MatchRunner
               userId={user.id}
@@ -103,18 +104,20 @@ export default function GroupsPage() {
           </SectionCardWithBorder>
 
           <SectionCardWithBorder
-            title="Manual Planning"
-            description="Start your own group and invite people manually or use AI to find teammates."
+            title={t("groupsPage.manualPlanning")}
+            description={t("groupsPage.manualPlanningDescription")}
           >
             <Button className="w-full" onClick={() => setIsCreateOpen(true)}>
               <Plus className="h-4 w-4" />
-              Create new group
+              {t("groupsPage.createNewGroup")}
             </Button>
           </SectionCardWithBorder>
 
+          {profile ? <SmartRecommendations profile={profile} /> : null}
+
           <Button variant="outline" className="w-full" onClick={loadGroups}>
             <Shuffle className="h-4 w-4" />
-            Refresh groups
+            {t("groupsPage.refreshGroups")}
           </Button>
         </div>
       </div>

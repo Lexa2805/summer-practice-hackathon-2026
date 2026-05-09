@@ -105,6 +105,30 @@ export type TeammateRecommendation = {
   shared_sports?: string[];
 };
 
+export type DirectUser = Pick<Profile, "id" | "full_name" | "username" | "avatar_url" | "city">;
+
+export type DirectConversation = {
+  id: string;
+  user_one_id?: string;
+  user_two_id?: string;
+  created_at?: string;
+  updated_at?: string;
+  other_user: DirectUser;
+  last_message?: string | null;
+  last_message_at?: string | null;
+  unread_count?: number;
+};
+
+export type DirectMessage = {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  sender?: Pick<Profile, "id" | "full_name" | "username" | "avatar_url">;
+  content: string;
+  read?: boolean;
+  created_at: string;
+};
+
 export type EventItem = {
   id: string;
   title: string;
@@ -151,6 +175,7 @@ export type NotificationItem = {
   read: boolean;
   related_group_id?: string | null;
   related_event_id?: string | null;
+  related_direct_conversation_id?: string | null;
   created_at: string;
 };
 

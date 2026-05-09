@@ -72,11 +72,11 @@ export function EventForm({
       setSaved(true);
       const achievementResult = await checkAchievements(userId);
       achievementResult.unlocked_now?.forEach((item) =>
-        showToast(`Achievement unlocked: ${item.title}`, "success")
+        showToast(`${t("errors.achievementUnlocked")} ${item.title}`, "success")
       );
       onCreated?.();
     } catch (createError) {
-      setError(createError instanceof Error ? createError.message : "Failed to create event.");
+      setError(createError instanceof Error ? createError.message : t("eventsPage.failedCreate"));
     }
   }
 
@@ -88,12 +88,12 @@ export function EventForm({
     const eventDate = time ? time.slice(0, 10) : new Date().toISOString().slice(0, 10);
 
     if (!city) {
-      setWeatherError("Add a city in your profile to check weather.");
+      setWeatherError(t("eventsPage.addCityWeather"));
       return;
     }
 
     if (!selectedSport) {
-      setWeatherError("Select a sport to check weather.");
+      setWeatherError(t("eventsPage.selectSportWeather"));
       return;
     }
 
@@ -105,7 +105,7 @@ export function EventForm({
       setWeatherError(
         weatherFetchError instanceof Error
           ? weatherFetchError.message
-          : "Failed to fetch weather recommendation."
+          : t("eventsPage.failedWeather")
       );
     } finally {
       setWeatherLoading(false);
@@ -115,16 +115,16 @@ export function EventForm({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{t("createEvent")}</CardTitle>
+        <CardTitle>{t("eventsPage.createEvent")}</CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={submit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="title">Title</Label>
+            <Label htmlFor="title">{t("eventsPage.title")}</Label>
             <Input id="title" value={title} onChange={(event) => setTitle(event.target.value)} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="sport">Sport</Label>
+            <Label htmlFor="sport">{t("common.sport")}</Label>
             <select
               id="sport"
               value={sportId}
@@ -139,58 +139,58 @@ export function EventForm({
             </select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="group">Group (optional)</Label>
+            <Label htmlFor="group">{t("eventsPage.groupOptional")}</Label>
             <select
               id="group"
               value={groupId}
               onChange={(event) => setGroupId(event.target.value)}
               className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <option value="">No group — independent event</option>
+              <option value="">{t("eventsPage.noGroupIndependent")}</option>
               {groups.map((group) => (
                 <option key={group.id} value={group.id}>
-                  {group.sport_name || "Matched group"} — {group.city || "group event"}
+                  {group.sport_name || t("groupsPage.matchedGroup")} - {group.city || t("eventsPage.groupEvent")}
                 </option>
               ))}
             </select>
             <p className="text-xs text-muted-foreground">
-              Linking to a group notifies its members and connects the event chat to the group.
+              {t("eventsPage.groupHelp")}
             </p>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="location">Location</Label>
+            <Label htmlFor="location">{t("eventsPage.location")}</Label>
             <Input id="location" value={location} onChange={(event) => setLocation(event.target.value)} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="time">Event time</Label>
+            <Label htmlFor="time">{t("eventsPage.eventTime")}</Label>
             <Input id="time" type="datetime-local" value={time} onChange={(event) => setTime(event.target.value)} />
           </div>
           <div className="rounded-md border border-border bg-muted/20 p-3">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-sm font-semibold">{t("weather")}</p>
+                <p className="text-sm font-semibold">{t("eventsPage.weather")}</p>
                 <p className="text-xs text-muted-foreground">
-                  {city ? `City: ${city}` : "Add a city to your profile to enable checks."}
+                  {city ? `${t("common.city")}: ${city}` : t("eventsPage.weatherHelpNoCity")}
                 </p>
               </div>
               <Button type="button" variant="outline" size="sm" disabled={weatherLoading} onClick={checkWeather}>
-                {weatherLoading ? "Checking..." : "Check weather"}
+                {weatherLoading ? t("common.checking") : t("eventsPage.checkWeather")}
               </Button>
             </div>
             {weather ? (
               <div className="mt-3 rounded-md bg-background p-3 text-sm">
                 <p className="font-semibold">{weather.recommendation}</p>
                 <p className="text-xs text-muted-foreground">{weather.summary}</p>
-                <p className="mt-1 text-xs font-semibold text-primary">Score: {weather.score}</p>
+                <p className="mt-1 text-xs font-semibold text-primary">{t("common.score")}: {weather.score}</p>
               </div>
             ) : null}
             {weatherError ? <p className="mt-2 text-xs font-semibold text-destructive">{weatherError}</p> : null}
           </div>
           <Button type="submit" disabled={!sportId}>
             <Plus className="h-4 w-4" />
-            {t("createEvent")}
+            {t("eventsPage.createEvent")}
           </Button>
-          {saved ? <p className="text-sm font-medium text-primary">Event created.</p> : null}
+          {saved ? <p className="text-sm font-medium text-primary">{t("eventsPage.eventCreated")}</p> : null}
           {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}
         </form>
       </CardContent>

@@ -23,7 +23,7 @@ export default function AvailabilityPage() {
   if (error || !user) {
     return (
       <main className="mx-auto max-w-7xl px-4 py-10 md:px-8">
-        <ErrorMessage message={error || "Login required."} />
+        <ErrorMessage message={error || t("errors.loginRequired")} />
       </main>
     );
   }
@@ -32,9 +32,9 @@ export default function AvailabilityPage() {
     <main className="mx-auto max-w-7xl px-4 py-10 md:px-8">
       <div className="grid gap-8 lg:grid-cols-[0.85fr_1.15fr]">
         <PageHeader
-          label="DAILY INTENT"
-          title={`${t("showup")}Today?`}
-          subtitle="One answer gives the backend enough signal to build same-day groups by sport."
+          label={t("showupPage.label")}
+          title={t("showupPage.title")}
+          subtitle={t("showupPage.subtitle")}
         />
         <div className="space-y-6">
           <AvailabilityCard userId={user.id} />

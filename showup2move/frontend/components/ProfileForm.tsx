@@ -61,14 +61,14 @@ export function ProfileForm({
   }, [form.sports_preferences]);
 
   const initials = useMemo(() => {
-    const source = form.full_name || form.username || "User";
+    const source = form.full_name || form.username || t("common.player");
     return source
       .trim()
       .split(/\s+/)
       .slice(0, 2)
       .map((part) => part.charAt(0).toUpperCase())
       .join("");
-  }, [form.full_name, form.username]);
+  }, [form.full_name, form.username, t]);
 
   function buildProfilePayload(source: Profile = form) {
     return {
@@ -125,12 +125,12 @@ export function ProfileForm({
     setSaved(false);
 
     if (!file.type.startsWith("image/")) {
-      setAvatarStatus({ type: "error", message: "Please choose an image file." });
+      setAvatarStatus({ type: "error", message: t("profilePage.chooseImage") });
       return;
     }
 
     if (file.size > maxAvatarSizeBytes) {
-      setAvatarStatus({ type: "error", message: "Profile photos must be 5MB or smaller." });
+      setAvatarStatus({ type: "error", message: t("profilePage.photoTooLarge") });
       return;
     }
 
@@ -150,7 +150,7 @@ export function ProfileForm({
 
       const { data } = supabase.storage.from("avatars").getPublicUrl(path);
       if (!data.publicUrl) {
-        throw new Error("Could not create a public URL for the uploaded photo.");
+        throw new Error(t("profilePage.noPublicUrl"));
       }
 
       const nextForm = { ...form, avatar_url: data.publicUrl };
@@ -160,16 +160,16 @@ export function ProfileForm({
       if (profile) {
         await saveProfile(buildProfilePayload(nextForm));
         notifyProfilePhotoUpdated();
-        setAvatarStatus({ type: "success", message: "Profile photo uploaded and saved." });
+        setAvatarStatus({ type: "success", message: t("profilePage.photoUploadedSaved") });
       } else {
-        setAvatarStatus({ type: "success", message: "Profile photo uploaded. Save your profile to keep it linked." });
+        setAvatarStatus({ type: "success", message: t("profilePage.photoUploadedUnsaved") });
       }
     } catch (uploadError) {
-      const message = uploadError instanceof Error ? uploadError.message : "Could not upload profile photo.";
+      const message = uploadError instanceof Error ? uploadError.message : t("profilePage.couldNotUpload");
       setAvatarStatus({
         type: "error",
         message: message.includes("row-level security")
-          ? "Upload blocked by Supabase Storage policy. Run the avatars bucket policies from database_schema.sql."
+          ? t("profilePage.uploadBlocked")
           : message
       });
     } finally {
@@ -186,23 +186,23 @@ export function ProfileForm({
       const result = await extractInterests(form.description);
       const detectedSports = result.sports || [];
       if (!detectedSports.length) {
-        setAiMessage("AI did not find supported sports in the description yet.");
+        setAiMessage(t("profilePage.aiFoundNone"));
         return;
       }
 
       const skillLevel = result.skill_level || "intermediate";
       if ((form.sports_preferences || []).length) {
         setPendingDetectedSports(detectedSports);
-        setAiMessage(`AI detected: ${detectedSports.join(", ")}. Use Apply to add them.`);
+        setAiMessage(t("profilePage.aiDetectedApply", { sports: detectedSports.join(", ") }));
       } else {
         setForm((value) => ({
           ...value,
           sports_preferences: preferencesForDetectedSports(detectedSports, skillLevel)
         }));
-        setAiMessage(`AI detected: ${detectedSports.join(", ")}.`);
+        setAiMessage(t("profilePage.aiDetected", { sports: detectedSports.join(", ") }));
       }
     } catch (detectError) {
-      setAiError(detectError instanceof Error ? detectError.message : "Could not detect sports with AI.");
+      setAiError(detectError instanceof Error ? detectError.message : t("profilePage.couldNotDetect"));
     } finally {
       setDetectingDescription(false);
     }
@@ -210,7 +210,7 @@ export function ProfileForm({
 
   async function analyzePhoto() {
     if (!form.avatar_url) {
-      setAvatarStatus({ type: "error", message: "Upload a profile photo before analyzing it." });
+      setAvatarStatus({ type: "error", message: t("profilePage.uploadBeforeAnalyze") });
       return;
     }
 
@@ -223,7 +223,7 @@ export function ProfileForm({
     } catch (analysisError) {
       setAvatarStatus({
         type: "error",
-        message: analysisError instanceof Error ? analysisError.message : "Could not analyze profile photo."
+        message: analysisError instanceof Error ? analysisError.message : t("profilePage.couldNotAnalyze")
       });
     } finally {
       setAnalyzingPhoto(false);
@@ -244,7 +244,7 @@ export function ProfileForm({
       notifyProfilePhotoUpdated();
       onSaved?.(savedProfile);
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Could not save profile.");
+      setError(saveError instanceof Error ? saveError.message : t("profilePage.couldNotSave"));
     } finally {
       setSaving(false);
     }
@@ -253,14 +253,14 @@ export function ProfileForm({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Profile setup</CardTitle>
+        <CardTitle>{t("profilePage.setup")}</CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={submit} className="space-y-5">
           <div className="flex flex-col gap-4 rounded-md border border-border bg-muted/30 p-4 sm:flex-row sm:items-center">
             <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-background">
               {form.avatar_url ? (
-                <img src={form.avatar_url} alt="Profile avatar" className="h-full w-full object-cover" />
+                <img src={form.avatar_url} alt={t("profilePage.profilePhoto")} className="h-full w-full object-cover" />
               ) : initials ? (
                 <span className="text-2xl font-black text-primary">{initials}</span>
               ) : (
@@ -269,8 +269,8 @@ export function ProfileForm({
             </div>
             <div className="min-w-0 flex-1 space-y-3">
               <div>
-                <h2 className="text-lg font-bold">Profile photo</h2>
-                <p className="text-sm text-muted-foreground">Use a clear image up to 5MB.</p>
+                <h2 className="text-lg font-bold">{t("profilePage.profilePhoto")}</h2>
+                <p className="text-sm text-muted-foreground">{t("profilePage.profilePhotoHelp")}</p>
               </div>
               <input
                 ref={avatarInputRef}
@@ -288,7 +288,7 @@ export function ProfileForm({
                 onClick={() => avatarInputRef.current?.click()}
               >
                 <Camera className="h-4 w-4" />
-                {uploadingAvatar ? "Uploading..." : "Upload profile photo"}
+                {uploadingAvatar ? t("profilePage.uploading") : t("profilePage.uploadProfilePhoto")}
               </Button>
               <Button
                 type="button"
@@ -298,7 +298,7 @@ export function ProfileForm({
                 onClick={analyzePhoto}
               >
                 <Sparkles className="h-4 w-4" />
-                {analyzingPhoto ? "Analyzing..." : "Analyze photo with AI"}
+                {analyzingPhoto ? t("profilePage.analyzing") : t("profilePage.analyzePhotoAI")}
               </Button>
               {avatarStatus ? (
                 <p
@@ -314,7 +314,7 @@ export function ProfileForm({
                   {photoAnalysis.detected_sports.length ? (
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <span className="text-muted-foreground">
-                        Detected: {photoAnalysis.detected_sports.join(", ")}
+                        {t("profilePage.detected")}: {photoAnalysis.detected_sports.join(", ")}
                       </span>
                       <Button
                         type="button"
@@ -322,7 +322,7 @@ export function ProfileForm({
                         variant="outline"
                         onClick={() => applyDetectedSports(photoAnalysis.detected_sports)}
                       >
-                        Apply sports
+                        {t("profilePage.applySports")}
                       </Button>
                     </div>
                   ) : null}
@@ -332,7 +332,7 @@ export function ProfileForm({
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="full_name">Full name</Label>
+              <Label htmlFor="full_name">{t("profilePage.fullName")}</Label>
               <Input
                 id="full_name"
                 value={form.full_name}
@@ -341,7 +341,7 @@ export function ProfileForm({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
+              <Label htmlFor="username">{t("profilePage.username")}</Label>
               <Input
                 id="username"
                 value={form.username}
@@ -352,7 +352,7 @@ export function ProfileForm({
           </div>
           <div className="grid gap-4 md:grid-cols-3">
             <div className="space-y-2 md:col-span-1">
-              <Label htmlFor="city">City</Label>
+              <Label htmlFor="city">{t("profilePage.city")}</Label>
               <Input
                 id="city"
                 value={form.city || ""}
@@ -360,7 +360,7 @@ export function ProfileForm({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="latitude">Latitude</Label>
+              <Label htmlFor="latitude">{t("profilePage.latitude")}</Label>
               <Input
                 id="latitude"
                 type="number"
@@ -372,7 +372,7 @@ export function ProfileForm({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="longitude">Longitude</Label>
+              <Label htmlFor="longitude">{t("profilePage.longitude")}</Label>
               <Input
                 id="longitude"
                 type="number"
@@ -386,7 +386,7 @@ export function ProfileForm({
           </div>
           <div className="space-y-2">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <Label htmlFor="description">Description</Label>
+              <Label htmlFor="description">{t("profilePage.description")}</Label>
               <Button
                 type="button"
                 size="sm"
@@ -395,14 +395,14 @@ export function ProfileForm({
                 onClick={detectDescriptionSports}
               >
                 <Sparkles className="h-4 w-4" />
-                {detectingDescription ? "Detecting..." : "Detect sports with AI"}
+                {detectingDescription ? t("profilePage.detecting") : t("profilePage.detectSportsAI")}
               </Button>
             </div>
             <Textarea
               id="description"
               value={form.description}
               onChange={(event) => setForm({ ...form, description: event.target.value })}
-              placeholder="What sports do you like, and what kind of group fits you?"
+              placeholder={t("profilePage.descriptionPlaceholder")}
             />
             {aiMessage ? (
               <div className="rounded-md bg-muted px-3 py-2 text-sm font-medium text-primary">
@@ -414,7 +414,7 @@ export function ProfileForm({
                     className="ml-3"
                     onClick={() => applyDetectedSports(pendingDetectedSports)}
                   >
-                    Apply
+                    {t("common.apply")}
                   </Button>
                 ) : null}
               </div>
@@ -422,7 +422,7 @@ export function ProfileForm({
             {aiError ? <p className="text-sm font-medium text-destructive">{aiError}</p> : null}
           </div>
           <div className="space-y-3">
-            <Label>Sports preferences</Label>
+            <Label>{t("profilePage.sportsPreferences")}</Label>
             <div className="grid gap-3 md:grid-cols-2">
               {sports.map((sport) => {
                 const preference = preferencesBySport.get(sport.id);
@@ -439,7 +439,7 @@ export function ProfileForm({
                     >
                       <span>{sport.name}</span>
                       <span className="text-xs text-muted-foreground">
-                        {sport.min_players}-{sport.max_players} players
+                        {sport.min_players}-{sport.max_players} {t("profilePage.players")}
                       </span>
                     </button>
                     {preference ? (
@@ -452,7 +452,7 @@ export function ProfileForm({
                             variant={preference.skill_level === level ? "default" : "outline"}
                             onClick={() => updatePreference(sport.id, level)}
                           >
-                            {level}
+                            {t(`profilePage.${level}`)}
                           </Button>
                         ))}
                       </div>
@@ -464,9 +464,9 @@ export function ProfileForm({
           </div>
           <Button type="submit" className="w-full md:w-auto" disabled={saving}>
             <Save className="h-4 w-4" />
-            {saving ? "Saving..." : t("save")}
+            {saving ? t("common.saving") : t("profilePage.saveProfile")}
           </Button>
-          {saved ? <p className="text-sm font-medium text-primary">Profile saved. You are ready to show up.</p> : null}
+          {saved ? <p className="text-sm font-medium text-primary">{t("profilePage.profileSaved")}</p> : null}
           {error ? <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">{error}</p> : null}
         </form>
       </CardContent>

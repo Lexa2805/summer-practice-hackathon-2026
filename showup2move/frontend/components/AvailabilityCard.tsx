@@ -48,13 +48,13 @@ export function AvailabilityCard({ userId }: { userId: string }) {
         preferred_time: "evening"
       });
       setStatus(isAvailable ? "yes" : "no");
-      setMessage(isAvailable ? t("youAreAvailable") : t("youAreUnavailable"));
+      setMessage(isAvailable ? t("showupPage.youAreAvailable") : t("showupPage.youAreUnavailable"));
       const achievementResult = await checkAchievements(userId);
       achievementResult.unlocked_now?.forEach((item) =>
-        showToast(`${t("achievementUnlocked")} ${item.title}`, "success")
+        showToast(`${t("errors.achievementUnlocked")} ${item.title}`, "success")
       );
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : t("couldNotSaveAvailability"));
+      setError(saveError instanceof Error ? saveError.message : t("showupPage.couldNotSave"));
     } finally {
       setLoading(false);
     }
@@ -62,8 +62,8 @@ export function AvailabilityCard({ userId }: { userId: string }) {
 
   return (
     <SectionCardWithBorder
-      title={t("showUpToday")}
-      description={t("showUpTodayDescription")}
+      title={t("showupPage.cardTitle")}
+      description={t("showupPage.cardDescription")}
     >
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
@@ -74,7 +74,7 @@ export function AvailabilityCard({ userId }: { userId: string }) {
             variant={status === "yes" ? "default" : "outline"}
           >
             <Check className="h-5 w-5" />
-            {t("yes")}
+            {t("common.yes")}
           </Button>
           <Button
             className="h-16 text-lg"
@@ -83,12 +83,12 @@ export function AvailabilityCard({ userId }: { userId: string }) {
             variant={status === "no" ? "destructive" : "outline"}
           >
             <X className="h-5 w-5" />
-            {t("no")}
+            {t("common.no")}
           </Button>
         </div>
         {status !== "idle" ? (
           <div className="rounded-md bg-muted px-4 py-3 text-sm font-medium">
-            {t("savedFor")} {today}: {status === "yes" ? t("available") : t("notAvailable")}.
+            {t("showupPage.savedFor")} {today}: {status === "yes" ? t("showupPage.available") : t("showupPage.notAvailable")}.
           </div>
         ) : null}
         {message ? <SuccessMessage message={message} /> : null}

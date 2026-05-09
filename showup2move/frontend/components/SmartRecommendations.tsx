@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Sparkles } from "lucide-react";
+import { MessageCircle, Sparkles } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getAvailableUsers, getTeammateRecommendations } from "@/lib/api";
-import type { Profile, TeammateRecommendation } from "@/lib/types";
+import { createDirectConversation, getAvailableUsers, getTeammateRecommendations } from "@/lib/api";
+import type { AvailableUser, Profile, TeammateRecommendation } from "@/lib/types";
 
 function todayLocal() {
   const now = new Date();
@@ -15,8 +16,11 @@ function todayLocal() {
 }
 
 export function SmartRecommendations({ profile }: { profile: Profile }) {
+  const router = useRouter();
   const [recommendations, setRecommendations] = useState<TeammateRecommendation[]>([]);
+  const [candidateProfiles, setCandidateProfiles] = useState<Record<string, AvailableUser>>({});
   const [loading, setLoading] = useState(false);
+  const [messagingIds, setMessagingIds] = useState<Set<string>>(new Set());
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -27,6 +31,7 @@ export function SmartRecommendations({ profile }: { profile: Profile }) {
     try {
       const availableUsers = await getAvailableUsers(todayLocal(), profile.city);
       const candidates = availableUsers.filter((user) => user.id !== profile.id);
+      setCandidateProfiles(Object.fromEntries(candidates.map((candidate) => [candidate.id, candidate])));
       if (!candidates.length) {
         setRecommendations([]);
         setMessage("No available teammates in your city yet.");
@@ -67,6 +72,32 @@ export function SmartRecommendations({ profile }: { profile: Profile }) {
     }
   }
 
+  async function handleMessage(userId: string) {
+    setMessagingIds((prev) => new Set(prev).add(userId));
+    setError("");
+    try {
+      const conversation = await createDirectConversation(profile.id, userId);
+      router.push(`/messages/${conversation.id}`);
+    } catch {
+      setError("Could not start conversation.");
+    } finally {
+      setMessagingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(userId);
+        return next;
+      });
+    }
+  }
+
+  function initials(name?: string) {
+    return (name || "Player")
+      .split(" ")
+      .map((part) => part[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase();
+  }
+
   return (
     <Card className="border-primary/20">
       <CardHeader>
@@ -82,13 +113,37 @@ export function SmartRecommendations({ profile }: { profile: Profile }) {
         </Button>
         {recommendations.length ? (
           <div className="space-y-3">
-            {recommendations.map((recommendation) => (
+            {recommendations.map((recommendation) => {
+              const candidate = candidateProfiles[recommendation.user_id];
+              const displayName = recommendation.full_name || candidate?.full_name || candidate?.username || "Player";
+              return (
               <div key={recommendation.user_id} className="rounded-md border bg-background p-3">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="font-semibold">{recommendation.full_name}</p>
-                  <span className="rounded-md bg-primary/10 px-2 py-1 text-xs font-bold text-primary">
-                    {recommendation.score}%
-                  </span>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-secondary text-xs font-bold text-secondary-foreground">
+                      {candidate?.avatar_url ? (
+                        <img src={candidate.avatar_url} alt={displayName} className="h-full w-full object-cover" />
+                      ) : (
+                        initials(displayName)
+                      )}
+                    </div>
+                    <p className="truncate font-semibold">{displayName}</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="rounded-md bg-primary/10 px-2 py-1 text-xs font-bold text-primary">
+                      {recommendation.score}%
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={messagingIds.has(recommendation.user_id)}
+                      onClick={() => handleMessage(recommendation.user_id)}
+                    >
+                      <MessageCircle className="h-3 w-3" />
+                      {messagingIds.has(recommendation.user_id) ? "Opening..." : "Message"}
+                    </Button>
+                  </div>
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">{recommendation.reason}</p>
                 {recommendation.shared_sports?.length ? (
@@ -97,7 +152,8 @@ export function SmartRecommendations({ profile }: { profile: Profile }) {
                   </p>
                 ) : null}
               </div>
-            ))}
+              );
+            })}
           </div>
         ) : null}
         {message ? <p className="text-sm font-medium text-muted-foreground">{message}</p> : null}

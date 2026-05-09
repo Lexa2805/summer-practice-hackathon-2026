@@ -36,7 +36,7 @@ export function MatchRunner({
     setResult("");
     setError("");
     if (!hasSports) {
-      setError("Select at least one sport in your profile before running the matcher.");
+      setError(t("matcher.noSports"));
       setLoading(false);
       return;
     }
@@ -44,7 +44,7 @@ export function MatchRunner({
       if (userId) {
         const availability = await getAvailability(userId, todayLocal());
         if (availability.is_available !== true) {
-          setError("Mark yourself available today before running the matcher.");
+          setError(t("matcher.markAvailable"));
           return;
         }
       }
@@ -55,12 +55,12 @@ export function MatchRunner({
       });
       setResult(
         data.created_groups > 0
-          ? `Matcher created ${data.created_groups} groups.`
-          : data.message || "Not enough available players yet. Invite more friends or try another sport."
+          ? t("matcher.createdGroups", { count: data.created_groups })
+          : data.message || t("matcher.notEnough")
       );
       onMatched?.();
     } catch (matchError) {
-      setError(matchError instanceof Error ? matchError.message : "Could not run matcher. Please check if the backend is running.");
+      setError(matchError instanceof Error ? matchError.message : t("matcher.couldNotRun"));
     } finally {
       setLoading(false);
     }
@@ -68,13 +68,13 @@ export function MatchRunner({
 
   return (
     <SectionCardWithBorder
-      title="Smart matching"
-      description="Runs today's availability through sport group sizing and captain selection."
+      title={t("matcher.smartMatching")}
+      description={t("matcher.description")}
     >
       <div className="space-y-4">
         <Button onClick={run} disabled={loading} className="w-full">
           <Shuffle className="h-4 w-4" />
-          {loading ? "Matching..." : t("runMatcher")}
+          {loading ? t("matcher.matching") : t("matcher.runMatcher")}
         </Button>
         {result ? <SuccessMessage message={result} /> : null}
         {error ? <ErrorMessage message={error} /> : null}
