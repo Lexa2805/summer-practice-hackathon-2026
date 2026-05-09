@@ -81,10 +81,84 @@ create table events (
 create table messages (
   id uuid primary key default gen_random_uuid(),
   group_id uuid references groups(id) on delete cascade,
+  event_id uuid references events(id) on delete cascade,
   sender_id uuid references profiles(id) on delete cascade,
   content text not null,
   created_at timestamp with time zone default now()
 );
+
+alter table messages
+add column if not exists event_id uuid references events(id) on delete cascade;
+
+create table if not exists notifications (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references profiles(id) on delete cascade,
+  title text not null,
+  message text not null,
+  type text default 'info',
+  read boolean default false,
+  related_group_id uuid references groups(id) on delete cascade,
+  related_event_id uuid references events(id) on delete cascade,
+  created_at timestamp with time zone default now()
+);
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'messages'
+      and policyname = 'Authenticated users can read messages'
+  ) then
+    create policy "Authenticated users can read messages"
+    on messages for select
+    to authenticated
+    using (true);
+  end if;
+
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'messages'
+      and policyname = 'Authenticated users can send messages'
+  ) then
+    create policy "Authenticated users can send messages"
+    on messages for insert
+    to authenticated
+    with check (auth.uid() = sender_id);
+  end if;
+
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'notifications'
+      and policyname = 'Users can read their own notifications'
+  ) then
+    create policy "Users can read their own notifications"
+    on notifications for select
+    to authenticated
+    using (auth.uid() = user_id);
+  end if;
+
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'notifications'
+      and policyname = 'Users can update their own notifications'
+  ) then
+    create policy "Users can update their own notifications"
+    on notifications for update
+    to authenticated
+    using (auth.uid() = user_id)
+    with check (auth.uid() = user_id);
+  end if;
+end $$;
+
+-- Optional realtime publication setup for Supabase Realtime.
+-- Run these manually if Realtime is not already enabled. Ignore duplicate-table errors.
+-- alter publication supabase_realtime add table messages;
+-- alter publication supabase_realtime add table notifications;
+-- alter publication supabase_realtime add table group_members;
 
 insert into sports (name, min_players, max_players)
 values

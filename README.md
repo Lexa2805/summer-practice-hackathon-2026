@@ -256,3 +256,82 @@ The best solutions will make organizing spontaneous sports activities:
 - **frictionless**,
 - **fun**,
 - and **realistic for busy people**.
+
+---
+
+## 🤖 Local AI with Ollama
+
+ShowUp2Move supports local AI using Ollama for privacy-focused, offline AI features.
+
+### Setup Ollama
+
+1. **Install Ollama**
+   - Visit [ollama.ai](https://ollama.ai) and download for your platform
+   - Or use package managers:
+     ```bash
+     # macOS
+     brew install ollama
+     
+     # Linux
+     curl -fsSL https://ollama.ai/install.sh | sh
+     ```
+
+2. **Pull the model**
+   ```bash
+   ollama pull llama3.2:1b
+   ```
+
+3. **Start Ollama** (if not running)
+   ```bash
+   ollama serve
+   ```
+
+4. **Test the model**
+   ```bash
+   ollama run llama3.2:1b
+   ```
+
+### Configure Backend
+
+Add to `showup2move/backend/.env`:
+
+```env
+AI_PROVIDER=ollama
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.2:1b
+```
+
+### Test Local AI
+
+Check if Ollama is running:
+```bash
+curl http://127.0.0.1:8000/ai/local/health
+```
+
+Expected response:
+```json
+{
+  "provider": "ollama",
+  "available": true,
+  "model": "llama3.2:1b"
+}
+```
+
+### Features Using Local AI
+
+1. **Explain Match with AI** - Get AI-powered explanations of why a group is a good match
+2. **Generate Captain Plan** - AI-generated coordination plans for event captains
+
+### Fallback Behavior
+
+If Ollama is unavailable:
+- System falls back to OpenRouter (if configured)
+- If both fail, uses rule-based fallback
+- No features break if AI is unavailable
+
+### Privacy Benefits
+
+- All AI processing happens locally
+- No data sent to external services
+- Works offline
+- Free to use

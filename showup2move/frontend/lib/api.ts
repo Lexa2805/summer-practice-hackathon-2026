@@ -1,16 +1,31 @@
 import { demoUserId, events, groups, messages, profile, sports } from "@/lib/mock-data";
 import type {
   EventItem,
+  AvailableUser,
+  CompatibilityResult,
+  WeatherRecommendation,
+  TeamBalanceResult,
+  TeamBalancePlayer,
+  AchievementsResponse,
+  AchievementsCheckResponse,
+  InviteDetails,
+  InviteCreateResponse,
+  FitnessIntegration,
+  FitnessIntegrationsResponse,
+  ExtractInterestsResult,
+  ExtractPhotoInterestsResult,
   Group,
   MatchRunPayload,
   MatchRunResult,
   Message,
+  NotificationItem,
   Profile,
   Sport,
+  TeammateRecommendation,
   UserSportPreference
 } from "@/lib/types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 async function apiFetch<T>(path: string, init?: RequestInit, fallback?: T): Promise<T> {
   try {
@@ -113,18 +128,34 @@ export function getGroupsWithFallback(userId = demoUserId) {
   return apiFetch<Group[]>(`/groups/${userId}`, undefined, groups);
 }
 
-export function getEvents() {
-  return apiFetchStrict<EventItem[]>("/events");
+export function getEvents(userId?: string) {
+  const query = userId ? `?user_id=${encodeURIComponent(userId)}` : "";
+  return apiFetchStrict<EventItem[]>(`/events${query}`);
+}
+
+export function getEvent(eventId: string) {
+  return apiFetchStrict<EventItem>(`/events/${eventId}`);
 }
 
 export function getEventsWithFallback() {
   return apiFetch<EventItem[]>("/events", undefined, events);
 }
 
+export function getEventCalendarUrl(eventId: string) {
+  return `${API_URL}/events/${eventId}/calendar.ics`;
+}
+
 export function createEvent(payload: Omit<EventItem, "id">) {
   return apiFetchStrict<EventItem>(
     "/events",
     { method: "POST", body: JSON.stringify(payload) },
+  );
+}
+
+export function deleteEvent(eventId: string, userId: string) {
+  return apiFetchStrict<{ message: string }>(
+    `/events/${eventId}?user_id=${encodeURIComponent(userId)}`,
+    { method: "DELETE" }
   );
 }
 
@@ -142,6 +173,36 @@ export function declineParticipation(groupId: string, userId: string) {
   );
 }
 
+export function createGroup(payload: any) {
+  return apiFetchStrict<Group>(
+    "/groups",
+    { method: "POST", body: JSON.stringify(payload) }
+  );
+}
+
+export function deleteGroup(groupId: string, userId: string) {
+  return apiFetchStrict<{ message: string }>(
+    `/groups/${groupId}`,
+    { method: "DELETE", body: JSON.stringify({ user_id: userId }) }
+  );
+}
+
+export function addGroupMembers(groupId: string, userIds: string[], addedBy: string) {
+  return apiFetchStrict<any[]>(
+    `/groups/${groupId}/members`,
+    { method: "POST", body: JSON.stringify({ user_ids: userIds, added_by: addedBy }) }
+  );
+}
+
+export function searchUsers(query: string, sportId?: string, city?: string, excludeGroupId?: string) {
+  const params = new URLSearchParams();
+  if (query) params.set("query", query);
+  if (sportId) params.set("sport_id", sportId);
+  if (city) params.set("city", city);
+  if (excludeGroupId) params.set("exclude_group_id", excludeGroupId);
+  return apiFetchStrict<AvailableUser[]>(`/users/search?${params.toString()}`);
+}
+
 export function getMatchStatus(userId: string, day?: string) {
   const query = day ? `?day=${day}` : "";
   return apiFetchStrict<{
@@ -155,10 +216,182 @@ export function getMessages(groupId = "demo-running-group") {
   return apiFetch<Message[]>(`/demo/messages/${groupId}`, undefined, messages);
 }
 
+export function getGroupMessages(groupId: string) {
+  return apiFetchStrict<Message[]>(`/groups/${groupId}/messages`);
+}
+
+export function sendGroupMessage(groupId: string, senderId: string, content: string) {
+  return apiFetchStrict<Message>(
+    `/groups/${groupId}/messages`,
+    { method: "POST", body: JSON.stringify({ sender_id: senderId, content }) }
+  );
+}
+
+export function getEventMessages(eventId: string) {
+  return apiFetchStrict<Message[]>(`/events/${eventId}/messages`);
+}
+
+export function sendEventMessage(eventId: string, senderId: string, content: string) {
+  return apiFetchStrict<Message>(
+    `/events/${eventId}/messages`,
+    { method: "POST", body: JSON.stringify({ sender_id: senderId, content }) }
+  );
+}
+
+export function getNotifications(userId: string) {
+  return apiFetchStrict<NotificationItem[]>(`/notifications/${userId}`);
+}
+
+export function markNotificationRead(notificationId: string) {
+  return apiFetchStrict<NotificationItem>(
+    `/notifications/${notificationId}/read`,
+    { method: "POST" }
+  );
+}
+
+export function markAllNotificationsRead(userId: string) {
+  return apiFetchStrict<{ updated: number }>(
+    `/notifications/${userId}/read-all`,
+    { method: "POST" }
+  );
+}
+
 export function extractInterests(description: string) {
-  return apiFetch(
+  return apiFetchStrict<ExtractInterestsResult>(
     "/ai/extract-interests",
-    { method: "POST", body: JSON.stringify({ description }) },
-    { sports: ["Running", "Tennis"], traits: ["social"], provider: "local-fallback" }
+    { method: "POST", body: JSON.stringify({ description }) }
+  );
+}
+
+export function extractPhotoInterests(imageUrl: string) {
+  return apiFetchStrict<ExtractPhotoInterestsResult>(
+    "/ai/extract-photo-interests",
+    { method: "POST", body: JSON.stringify({ image_url: imageUrl }) }
+  );
+}
+
+export function getCompatibilityScore(userA: Record<string, unknown>, userB: Record<string, unknown>) {
+  return apiFetchStrict<CompatibilityResult>(
+    "/ai/compatibility-score",
+    { method: "POST", body: JSON.stringify({ user_a: userA, user_b: userB }) }
+  );
+}
+
+export function getAvailableUsers(date: string, city?: string) {
+  const params = new URLSearchParams({ date });
+  if (city) params.set("city", city);
+  return apiFetchStrict<AvailableUser[]>(`/users/available?${params.toString()}`);
+}
+
+export function getTeammateRecommendations(
+  currentUser: Record<string, unknown>,
+  candidates: Array<Record<string, unknown>>
+) {
+  return apiFetchStrict<{ recommendations: TeammateRecommendation[]; provider?: string }>(
+    "/ai/teammate-recommendations",
+    { method: "POST", body: JSON.stringify({ current_user: currentUser, candidates }) }
+  );
+}
+
+export function getWeatherRecommendation(city: string, sport: string, date: string) {
+  const params = new URLSearchParams({ city, sport, date });
+  return apiFetchStrict<WeatherRecommendation>(`/weather/recommendation?${params.toString()}`);
+}
+
+export function balanceTeams(payload: { sport: string; players: TeamBalancePlayer[]; teams_count: number }) {
+  return apiFetchStrict<TeamBalanceResult>(
+    "/teams/balance",
+    { method: "POST", body: JSON.stringify(payload) }
+  );
+}
+
+export function getAchievements(userId: string) {
+  return apiFetchStrict<AchievementsResponse>(`/achievements/${userId}`);
+}
+
+export function checkAchievements(userId: string) {
+  return apiFetchStrict<AchievementsCheckResponse>(`/achievements/check/${userId}`, { method: "POST" });
+}
+
+export function createEventInvite(
+  eventId: string,
+  payload: { invited_email?: string; invited_user_id?: string; invited_by?: string }
+) {
+  return apiFetchStrict<InviteCreateResponse>(
+    `/events/${eventId}/invites`,
+    { method: "POST", body: JSON.stringify(payload) }
+  );
+}
+
+export function getInvite(token: string) {
+  return apiFetchStrict<InviteDetails>(`/invites/${token}`);
+}
+
+export function acceptInvite(token: string, userId: string) {
+  return apiFetchStrict<{ invite: InviteDetails }>(
+    `/invites/${token}/accept`,
+    { method: "POST", body: JSON.stringify({ user_id: userId }) }
+  );
+}
+
+export function getFitnessIntegrations(userId: string) {
+  return apiFetchStrict<FitnessIntegrationsResponse>(`/fitness/${userId}`);
+}
+
+export function connectFitnessDemo(userId: string, provider: string) {
+  return apiFetchStrict<FitnessIntegration>(
+    `/fitness/${userId}/connect-demo`,
+    { method: "POST", body: JSON.stringify({ provider }) }
+  );
+}
+
+export function disconnectFitnessDemo(userId: string, provider: string) {
+  return apiFetchStrict<FitnessIntegration>(
+    `/fitness/${userId}/disconnect-demo`,
+    { method: "POST", body: JSON.stringify({ provider }) }
+  );
+}
+
+
+export function updateEventParticipation(eventId: string, userId: string, status: "attending" | "maybe" | "declined") {
+  return apiFetchStrict<any>(
+    `/events/${eventId}/participate`,
+    { method: "POST", body: JSON.stringify({ user_id: userId, status }) }
+  );
+}
+
+export function getEventParticipants(eventId: string) {
+  return apiFetchStrict<any[]>(`/events/${eventId}/participants`);
+}
+
+export function getLocalAIHealth() {
+  return apiFetchStrict<{
+    provider: string;
+    available: boolean;
+    model?: string;
+    error?: string;
+  }>("/ai/local/health");
+}
+
+export function explainMatch(groupId: string) {
+  return apiFetchStrict<{
+    title: string;
+    reasons: string[];
+    summary: string;
+    source: string;
+  }>(
+    "/ai/explain-match",
+    { method: "POST", body: JSON.stringify({ group_id: groupId }) }
+  );
+}
+
+export function generateCaptainPlan(groupId: string, eventId: string) {
+  return apiFetchStrict<{
+    plan: string[];
+    message: string;
+    source: string;
+  }>(
+    "/ai/captain-plan",
+    { method: "POST", body: JSON.stringify({ group_id: groupId, event_id: eventId }) }
   );
 }

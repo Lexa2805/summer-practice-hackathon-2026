@@ -22,6 +22,28 @@ def _is_missing_group_metadata_error(exc: Exception) -> bool:
     )
 
 
+def _create_notification(
+    supabase,
+    user_id: str,
+    title: str,
+    message: str,
+    notification_type: str = "info",
+    related_group_id: str | None = None,
+) -> None:
+    try:
+        supabase.table("notifications").insert(
+            {
+                "user_id": user_id,
+                "title": title,
+                "message": message,
+                "type": notification_type,
+                "related_group_id": related_group_id,
+            }
+        ).execute()
+    except Exception:
+        return
+
+
 def calculate_distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     radius_km = 6371
     delta_lat = radians(lat2 - lat1)
@@ -353,6 +375,15 @@ def run_supabase_matching(
                 for candidate in selected
             ]
             supabase.table("group_members").upsert(members, on_conflict="group_id,user_id").execute()
+            for candidate in selected:
+                _create_notification(
+                    supabase,
+                    candidate["user_id"],
+                    "New matched group",
+                    f"You were matched into a new {sport['name']} group.",
+                    "match",
+                    related_group_id=group["id"],
+                )
             created_groups.append(
                 {
                     **group,

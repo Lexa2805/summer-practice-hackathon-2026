@@ -4,10 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { Check, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getAvailability, setAvailability } from "@/lib/api";
+import { SectionCardWithBorder } from "@/components/ui/section-card";
+import { ErrorMessage, SuccessMessage } from "@/components/ui/error-state";
+import { checkAchievements, getAvailability, setAvailability } from "@/lib/api";
+import { showToast } from "@/lib/toast";
+import { useI18n } from "@/lib/i18n";
 
 export function AvailabilityCard({ userId }: { userId: string }) {
+  const { t } = useI18n();
   const [status, setStatus] = useState<"yes" | "no" | "idle">("idle");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -44,51 +48,52 @@ export function AvailabilityCard({ userId }: { userId: string }) {
         preferred_time: "evening"
       });
       setStatus(isAvailable ? "yes" : "no");
-      setMessage(isAvailable ? "You are available today." : "You are marked unavailable today.");
+      setMessage(isAvailable ? t("youAreAvailable") : t("youAreUnavailable"));
+      const achievementResult = await checkAchievements(userId);
+      achievementResult.unlocked_now?.forEach((item) =>
+        showToast(`${t("achievementUnlocked")} ${item.title}`, "success")
+      );
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Could not save availability.");
+      setError(saveError instanceof Error ? saveError.message : t("couldNotSaveAvailability"));
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <Card className="border-primary/20">
-      <CardHeader>
-        <CardTitle className="text-2xl">ShowUpToday?</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <p className="text-sm text-muted-foreground">
-          Mark today and the matcher can place you in a group for sports you already like.
-        </p>
+    <SectionCardWithBorder
+      title={t("showUpToday")}
+      description={t("showUpTodayDescription")}
+    >
+      <div className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <Button
-            className="h-14"
+            className="h-16 text-lg"
             disabled={loading}
             onClick={() => respond(true)}
             variant={status === "yes" ? "default" : "outline"}
           >
             <Check className="h-5 w-5" />
-            Yes
+            {t("yes")}
           </Button>
           <Button
-            className="h-14"
+            className="h-16 text-lg"
             disabled={loading}
             onClick={() => respond(false)}
             variant={status === "no" ? "destructive" : "outline"}
           >
             <X className="h-5 w-5" />
-            No
+            {t("no")}
           </Button>
         </div>
         {status !== "idle" ? (
-          <p className="rounded-md bg-muted px-3 py-2 text-sm font-medium">
-            Saved for {today}: {status === "yes" ? "available" : "not available"}.
-          </p>
+          <div className="rounded-md bg-muted px-4 py-3 text-sm font-medium">
+            {t("savedFor")} {today}: {status === "yes" ? t("available") : t("notAvailable")}.
+          </div>
         ) : null}
-        {message ? <p className="text-sm font-medium text-primary">{message}</p> : null}
-        {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}
-      </CardContent>
-    </Card>
+        {message ? <SuccessMessage message={message} /> : null}
+        {error ? <ErrorMessage message={error} /> : null}
+      </div>
+    </SectionCardWithBorder>
   );
 }

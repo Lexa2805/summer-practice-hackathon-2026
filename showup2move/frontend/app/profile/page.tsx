@@ -3,14 +3,21 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { AchievementsPanel } from "@/components/AchievementsPanel";
+import { FitnessIntegrationsPanel } from "@/components/FitnessIntegrationsPanel";
 import { ProfileForm } from "@/components/ProfileForm";
+import { PageHeader } from "@/components/ui/page-header";
+import { ErrorMessage } from "@/components/ui/error-state";
+import { LoadingPage } from "@/components/ui/loading-skeleton";
 import { getSports } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 import type { Sport } from "@/lib/types";
 import { useAuthProfile } from "@/lib/use-auth-profile";
 
 export default function ProfilePage() {
   const router = useRouter();
   const { user, profile, loading, error } = useAuthProfile({ requireProfile: false });
+  const { t } = useI18n();
   const [sports, setSports] = useState<Sport[]>([]);
   const [sportsError, setSportsError] = useState("");
 
@@ -19,7 +26,7 @@ export default function ProfilePage() {
       try {
         setSports(await getSports());
       } catch (loadError) {
-        setSportsError(loadError instanceof Error ? loadError.message : "Could not load sports.");
+        setSportsError(loadError instanceof Error ? loadError.message : "Could not load sports. Please check if the backend is running.");
       }
     }
 
@@ -27,28 +34,34 @@ export default function ProfilePage() {
   }, []);
 
   if (loading) {
-    return <main className="mx-auto max-w-4xl px-4 py-8 text-muted-foreground">Checking account...</main>;
+    return (
+      <main className="mx-auto max-w-4xl px-4 py-10 md:px-8">
+        <LoadingPage />
+      </main>
+    );
   }
 
   if (error || !user) {
-    return <main className="mx-auto max-w-4xl px-4 py-8 text-destructive">{error || "Login required."}</main>;
+    return (
+      <main className="mx-auto max-w-4xl px-4 py-10 md:px-8">
+        <ErrorMessage message={error || "Login required."} />
+      </main>
+    );
   }
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-8">
-      <div className="mb-6">
-        <p className="text-sm font-bold uppercase tracking-[0.18em] text-primary">Sports identity</p>
-        <h1 className="mt-2 text-4xl font-black">Profile</h1>
-        {!profile ? (
-          <p className="mt-2 text-muted-foreground">Create your profile before opening the dashboard.</p>
-        ) : null}
+    <main className="mx-auto max-w-4xl px-4 py-10 md:px-8">
+      <PageHeader
+        label="SPORTS IDENTITY"
+        title={t("profile")}
+        subtitle={!profile ? "Create your profile before opening the dashboard." : undefined}
+      />
+      {sportsError ? <ErrorMessage message={sportsError} className="mb-6" /> : null}
+      <div className="space-y-6">
+        <ProfileForm userId={user.id} profile={profile} sports={sports} onSaved={() => router.push("/dashboard")} />
+        <AchievementsPanel userId={user.id} />
+        <FitnessIntegrationsPanel userId={user.id} />
       </div>
-      {sportsError ? (
-        <p className="mb-4 rounded-md bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">
-          {sportsError}
-        </p>
-      ) : null}
-      <ProfileForm userId={user.id} profile={profile} sports={sports} onSaved={() => router.push("/dashboard")} />
     </main>
   );
 }

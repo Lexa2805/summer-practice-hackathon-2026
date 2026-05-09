@@ -1,19 +1,24 @@
 "use client";
 
 import { ChangeEvent, FormEvent, useMemo, useRef, useState } from "react";
-import { Camera, Save, UserCircle } from "lucide-react";
+import { Camera, Save, Sparkles, UserCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { saveProfile } from "@/lib/api";
+import { extractInterests, extractPhotoInterests, saveProfile } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
-import type { Profile, SkillLevel, Sport } from "@/lib/types";
+import type { ExtractPhotoInterestsResult, Profile, SkillLevel, Sport } from "@/lib/types";
 
 const skillLevels: SkillLevel[] = ["beginner", "intermediate", "advanced"];
 const maxAvatarSizeBytes = 5 * 1024 * 1024;
+
+function notifyProfilePhotoUpdated() {
+  window.dispatchEvent(new Event("showup2move:profile-photo-updated"));
+}
 
 export function ProfileForm({
   userId,
@@ -43,6 +48,13 @@ export function ProfileForm({
   const [error, setError] = useState("");
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [avatarStatus, setAvatarStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [detectingDescription, setDetectingDescription] = useState(false);
+  const [aiMessage, setAiMessage] = useState("");
+  const [aiError, setAiError] = useState("");
+  const [pendingDetectedSports, setPendingDetectedSports] = useState<string[]>([]);
+  const [analyzingPhoto, setAnalyzingPhoto] = useState(false);
+  const [photoAnalysis, setPhotoAnalysis] = useState<ExtractPhotoInterestsResult | null>(null);
+  const { t } = useI18n();
 
   const preferencesBySport = useMemo(() => {
     return new Map((form.sports_preferences || []).map((item) => [item.sport_id, item]));
@@ -70,10 +82,29 @@ export function ProfileForm({
     const current = preferencesBySport.get(sportId);
     const next = current
       ? (form.sports_preferences || []).map((item) =>
-          item.sport_id === sportId ? { ...item, skill_level: skillLevel } : item
-        )
+        item.sport_id === sportId ? { ...item, skill_level: skillLevel } : item
+      )
       : [...(form.sports_preferences || []), { sport_id: sportId, skill_level: skillLevel }];
     setForm((value) => ({ ...value, sports_preferences: next }));
+  }
+
+  function preferencesForDetectedSports(detectedSports: string[], skillLevel: SkillLevel = "intermediate") {
+    const current = new Map((form.sports_preferences || []).map((item) => [item.sport_id, item]));
+    detectedSports.forEach((sportName) => {
+      const sport = sports.find((item) => item.name.toLowerCase() === sportName.toLowerCase());
+      if (sport && !current.has(sport.id)) {
+        current.set(sport.id, { sport_id: sport.id, skill_level: skillLevel });
+      }
+    });
+    return Array.from(current.values());
+  }
+
+  function applyDetectedSports(detectedSports: string[], skillLevel: SkillLevel = "intermediate") {
+    setForm((value) => ({
+      ...value,
+      sports_preferences: preferencesForDetectedSports(detectedSports, skillLevel)
+    }));
+    setPendingDetectedSports([]);
   }
 
   function toggleSport(sportId: string) {
@@ -124,9 +155,11 @@ export function ProfileForm({
 
       const nextForm = { ...form, avatar_url: data.publicUrl };
       setForm(nextForm);
+      notifyProfilePhotoUpdated();
 
       if (profile) {
         await saveProfile(buildProfilePayload(nextForm));
+        notifyProfilePhotoUpdated();
         setAvatarStatus({ type: "success", message: "Profile photo uploaded and saved." });
       } else {
         setAvatarStatus({ type: "success", message: "Profile photo uploaded. Save your profile to keep it linked." });
@@ -144,6 +177,59 @@ export function ProfileForm({
     }
   }
 
+  async function detectDescriptionSports() {
+    setDetectingDescription(true);
+    setAiMessage("");
+    setAiError("");
+    setPendingDetectedSports([]);
+    try {
+      const result = await extractInterests(form.description);
+      const detectedSports = result.sports || [];
+      if (!detectedSports.length) {
+        setAiMessage("AI did not find supported sports in the description yet.");
+        return;
+      }
+
+      const skillLevel = result.skill_level || "intermediate";
+      if ((form.sports_preferences || []).length) {
+        setPendingDetectedSports(detectedSports);
+        setAiMessage(`AI detected: ${detectedSports.join(", ")}. Use Apply to add them.`);
+      } else {
+        setForm((value) => ({
+          ...value,
+          sports_preferences: preferencesForDetectedSports(detectedSports, skillLevel)
+        }));
+        setAiMessage(`AI detected: ${detectedSports.join(", ")}.`);
+      }
+    } catch (detectError) {
+      setAiError(detectError instanceof Error ? detectError.message : "Could not detect sports with AI.");
+    } finally {
+      setDetectingDescription(false);
+    }
+  }
+
+  async function analyzePhoto() {
+    if (!form.avatar_url) {
+      setAvatarStatus({ type: "error", message: "Upload a profile photo before analyzing it." });
+      return;
+    }
+
+    setAnalyzingPhoto(true);
+    setPhotoAnalysis(null);
+    setAvatarStatus(null);
+    try {
+      const result = await extractPhotoInterests(form.avatar_url);
+      setPhotoAnalysis(result);
+    } catch (analysisError) {
+      setAvatarStatus({
+        type: "error",
+        message: analysisError instanceof Error ? analysisError.message : "Could not analyze profile photo."
+      });
+    } finally {
+      setAnalyzingPhoto(false);
+    }
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
@@ -155,6 +241,7 @@ export function ProfileForm({
       const savedProfile = await saveProfile(payload);
       setSaved(true);
       setForm(savedProfile);
+      notifyProfilePhotoUpdated();
       onSaved?.(savedProfile);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Could not save profile.");
@@ -203,14 +290,43 @@ export function ProfileForm({
                 <Camera className="h-4 w-4" />
                 {uploadingAvatar ? "Uploading..." : "Upload profile photo"}
               </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full sm:w-auto"
+                disabled={analyzingPhoto || !form.avatar_url}
+                onClick={analyzePhoto}
+              >
+                <Sparkles className="h-4 w-4" />
+                {analyzingPhoto ? "Analyzing..." : "Analyze photo with AI"}
+              </Button>
               {avatarStatus ? (
                 <p
-                  className={`text-sm font-medium ${
-                    avatarStatus.type === "success" ? "text-primary" : "text-destructive"
-                  }`}
+                  className={`text-sm font-medium ${avatarStatus.type === "success" ? "text-primary" : "text-destructive"
+                    }`}
                 >
                   {avatarStatus.message}
                 </p>
+              ) : null}
+              {photoAnalysis ? (
+                <div className="rounded-md bg-background p-3 text-sm">
+                  <p className="font-medium">{photoAnalysis.summary}</p>
+                  {photoAnalysis.detected_sports.length ? (
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className="text-muted-foreground">
+                        Detected: {photoAnalysis.detected_sports.join(", ")}
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => applyDetectedSports(photoAnalysis.detected_sports)}
+                      >
+                        Apply sports
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
               ) : null}
             </div>
           </div>
@@ -269,13 +385,41 @@ export function ProfileForm({
             </div>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <Label htmlFor="description">Description</Label>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={detectingDescription || !form.description.trim()}
+                onClick={detectDescriptionSports}
+              >
+                <Sparkles className="h-4 w-4" />
+                {detectingDescription ? "Detecting..." : "Detect sports with AI"}
+              </Button>
+            </div>
             <Textarea
               id="description"
               value={form.description}
               onChange={(event) => setForm({ ...form, description: event.target.value })}
               placeholder="What sports do you like, and what kind of group fits you?"
             />
+            {aiMessage ? (
+              <div className="rounded-md bg-muted px-3 py-2 text-sm font-medium text-primary">
+                {aiMessage}
+                {pendingDetectedSports.length ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="ml-3"
+                    onClick={() => applyDetectedSports(pendingDetectedSports)}
+                  >
+                    Apply
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+            {aiError ? <p className="text-sm font-medium text-destructive">{aiError}</p> : null}
           </div>
           <div className="space-y-3">
             <Label>Sports preferences</Label>
@@ -285,9 +429,8 @@ export function ProfileForm({
                 return (
                   <div
                     key={sport.id}
-                    className={`rounded-md border p-3 transition ${
-                      preference ? "border-primary bg-primary/5" : "border-border bg-background"
-                    }`}
+                    className={`rounded-md border p-3 transition ${preference ? "border-primary bg-primary/5" : "border-border bg-background"
+                      }`}
                   >
                     <button
                       type="button"
@@ -321,7 +464,7 @@ export function ProfileForm({
           </div>
           <Button type="submit" className="w-full md:w-auto" disabled={saving}>
             <Save className="h-4 w-4" />
-            {saving ? "Saving..." : "Save profile"}
+            {saving ? "Saving..." : t("save")}
           </Button>
           {saved ? <p className="text-sm font-medium text-primary">Profile saved. You are ready to show up.</p> : null}
           {error ? <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">{error}</p> : null}

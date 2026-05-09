@@ -4,8 +4,10 @@ import { useState } from "react";
 import { Shuffle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SectionCardWithBorder } from "@/components/ui/section-card";
+import { ErrorMessage, SuccessMessage } from "@/components/ui/error-state";
 import { getAvailability, runMatching } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 
 function todayLocal() {
   const now = new Date();
@@ -27,6 +29,7 @@ export function MatchRunner({
   const [result, setResult] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const { t } = useI18n();
 
   async function run() {
     setLoading(true);
@@ -57,28 +60,25 @@ export function MatchRunner({
       );
       onMatched?.();
     } catch (matchError) {
-      setError(matchError instanceof Error ? matchError.message : "Could not run matcher.");
+      setError(matchError instanceof Error ? matchError.message : "Could not run matcher. Please check if the backend is running.");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <Card className="border-primary/20">
-      <CardHeader>
-        <CardTitle>Smart matching</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <p className="text-sm text-muted-foreground">
-          Runs today&apos;s availability through sport group sizing and captain selection.
-        </p>
-        <Button onClick={run} disabled={loading}>
+    <SectionCardWithBorder
+      title="Smart matching"
+      description="Runs today's availability through sport group sizing and captain selection."
+    >
+      <div className="space-y-4">
+        <Button onClick={run} disabled={loading} className="w-full">
           <Shuffle className="h-4 w-4" />
-          {loading ? "Matching..." : "Run matcher"}
+          {loading ? "Matching..." : t("runMatcher")}
         </Button>
-        {result ? <p className="text-sm font-medium">{result}</p> : null}
-        {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}
-      </CardContent>
-    </Card>
+        {result ? <SuccessMessage message={result} /> : null}
+        {error ? <ErrorMessage message={error} /> : null}
+      </div>
+    </SectionCardWithBorder>
   );
 }

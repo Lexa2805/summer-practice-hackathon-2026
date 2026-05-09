@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { Navbar } from "@/components/Navbar";
+import { ToastHost } from "@/components/ToastHost";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -13,6 +14,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en">
       <body>
         <Navbar />
+        <ToastHost />
         {children}
       </body>
     </html>

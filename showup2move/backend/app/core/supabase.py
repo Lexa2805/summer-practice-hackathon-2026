@@ -1,5 +1,6 @@
 import os
 from functools import lru_cache
+from time import sleep
 from typing import Any
 
 from fastapi import HTTPException
@@ -36,3 +37,28 @@ def require_supabase() -> Any:
             ),
         )
     return client
+
+
+def _is_transient_supabase_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return any(
+        text in message
+        for text in (
+            "server disconnected",
+            "connection reset",
+            "connection aborted",
+            "remote protocol",
+            "timeout",
+            "temporarily unavailable",
+        )
+    )
+
+
+def execute_supabase_read(query: Any, retries: int = 2) -> Any:
+    for attempt in range(retries + 1):
+        try:
+            return query.execute()
+        except Exception as exc:
+            if attempt >= retries or not _is_transient_supabase_error(exc):
+                raise
+            sleep(0.2 * (attempt + 1))
